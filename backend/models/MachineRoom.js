@@ -57,9 +57,9 @@ MachineRoom.init({
     comment: '创建人ID'
   },
   construction_type: {
-    type: DataTypes.ENUM('purchase', 'lease', 'self_build', 'container'),
+    type: DataTypes.ENUM('purchase', 'lease', 'self_build', 'container', 'reuse'),
     defaultValue: 'purchase',
-    comment: '建设方式：purchase-购置，lease-租赁，self_build-自建，container-一体化集装箱'
+    comment: '建设方式：purchase-购置，lease-租赁，self_build-自建，container-一体化集装箱，reuse-利旧'
   }
 }, {
   sequelize,

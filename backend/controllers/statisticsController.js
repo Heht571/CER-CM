@@ -7,48 +7,85 @@ const { Op } = require('sequelize');
  */
 const getOverview = async (req, res, next) => {
   try {
-    // 机房统计
-    const totalRooms = await MachineRoom.count();
-    const planningRooms = await MachineRoom.count({ where: { status: 'planning' } });
-    const inProgressRooms = await MachineRoom.count({ where: { status: 'in_progress' } });
-    const completedRooms = await MachineRoom.count({ where: { status: 'completed' } });
-    const pausedRooms = await MachineRoom.count({ where: { status: 'paused' } });
+    // 机房统计 - 使用原生SQL
+    const roomStats = await sequelize.query(
+      `SELECT status, COUNT(*) as count FROM machine_rooms GROUP BY status`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
 
-    // 任务统计
-    const totalTasks = await RoomTask.count();
-    const completedTasks = await RoomTask.count({ where: { status: 'completed' } });
-    const inProgressTasks = await RoomTask.count({ where: { status: 'in_progress' } });
-    const notStartedTasks = await RoomTask.count({ where: { status: 'not_started' } });
+    const roomCounts = {
+      total: 0,
+      planning: 0,
+      in_progress: 0,
+      completed: 0,
+      paused: 0
+    };
+    roomStats.forEach(stat => {
+      roomCounts.total += parseInt(stat.count);
+      if (stat.status) {
+        roomCounts[stat.status] = parseInt(stat.count);
+      }
+    });
+
+    // 任务统计 - 使用原生SQL
+    const taskStats = await sequelize.query(
+      `SELECT status, COUNT(*) as count FROM room_tasks GROUP BY status`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+
+    const taskCounts = {
+      total: 0,
+      completed: 0,
+      in_progress: 0,
+      not_started: 0
+    };
+    taskStats.forEach(stat => {
+      taskCounts.total += parseInt(stat.count);
+      if (stat.status) {
+        taskCounts[stat.status] = parseInt(stat.count);
+      }
+    });
 
     // 延期任务统计
     const today = new Date();
-    const delayedTasks = await RoomTask.count({
-      where: {
-        status: { [Op.ne]: 'completed' },
-        planned_end_date: { [Op.lt]: today, [Op.ne]: null }
-      }
-    });
+    const delayedResult = await sequelize.query(
+      `SELECT COUNT(*) as count FROM room_tasks
+       WHERE status != 'completed' AND planned_end_date < $1 AND planned_end_date IS NOT NULL`,
+      { bind: [today], type: sequelize.QueryTypes.SELECT }
+    );
+    const delayedTasks = parseInt(delayedResult[0]?.count) || 0;
 
     // 负责人统计
     const totalManagers = await User.count({ where: { role: 'manager', status: 1 } });
 
+    // 建设方式统计 - 使用原生SQL
+    const constructionStats = await sequelize.query(
+      `SELECT construction_type, COUNT(*) as count FROM machine_rooms GROUP BY construction_type`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+
+    const constructionCounts = {
+      purchase: 0,
+      lease: 0,
+      self_build: 0,
+      container: 0,
+      reuse: 0
+    };
+    constructionStats.forEach(stat => {
+      if (stat.construction_type && constructionCounts.hasOwnProperty(stat.construction_type)) {
+        constructionCounts[stat.construction_type] = parseInt(stat.count);
+      }
+    });
+
     success(res, {
-      rooms: {
-        total: totalRooms,
-        planning: planningRooms,
-        inProgress: inProgressRooms,
-        completed: completedRooms,
-        paused: pausedRooms
-      },
+      rooms: roomCounts,
       tasks: {
-        total: totalTasks,
-        completed: completedTasks,
-        inProgress: inProgressTasks,
-        notStarted: notStartedTasks,
+        ...taskCounts,
         delayed: delayedTasks
       },
       managers: totalManagers,
-      overallProgress: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+      overallProgress: taskCounts.total > 0 ? Math.round((taskCounts.completed / taskCounts.total) * 100) : 0,
+      constructionTypes: constructionCounts
     });
   } catch (error) {
     next(error);
@@ -56,33 +93,49 @@ const getOverview = async (req, res, next) => {
 };
 
 /**
- * 按阶段统计
+ * 按阶段统计 - 优化版，避免N+1查询
  */
 const getByPhase = async (req, res, next) => {
   try {
-    const phases = await ConstructionPhase.findAll({
-      order: [['phase_number', 'ASC']]
+    // 获取所有阶段
+    const allPhases = await ConstructionPhase.findAll({
+      order: [['phase_number', 'ASC']],
+      raw: true
     });
 
-    const result = await Promise.all(phases.map(async (phase) => {
-      const total = await RoomTask.count({ where: { phase_id: phase.id } });
-      const completed = await RoomTask.count({
-        where: { phase_id: phase.id, status: 'completed' }
-      });
-      const inProgress = await RoomTask.count({
-        where: { phase_id: phase.id, status: 'in_progress' }
-      });
+    // 使用原生SQL查询避免歧义
+    const phaseStats = await sequelize.query(
+      `SELECT phase_id,
+              COUNT(*) as total,
+              SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+              SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as "inProgress"
+       FROM room_tasks
+       GROUP BY phase_id`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
 
+    // 合并数据
+    const statsMap = {};
+    phaseStats.forEach(stat => {
+      statsMap[stat.phase_id] = {
+        total: parseInt(stat.total) || 0,
+        completed: parseInt(stat.completed) || 0,
+        inProgress: parseInt(stat.inProgress) || 0
+      };
+    });
+
+    const result = allPhases.map(phase => {
+      const stats = statsMap[phase.id] || { total: 0, completed: 0, inProgress: 0 };
       return {
         id: phase.id,
         name: phase.name,
         phaseNumber: phase.phase_number,
-        total,
-        completed,
-        inProgress,
-        percentage: total > 0 ? Math.round((completed / total) * 100) : 0
+        total: stats.total,
+        completed: stats.completed,
+        inProgress: stats.inProgress,
+        percentage: stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0
       };
-    }));
+    });
 
     success(res, result);
   } catch (error) {
@@ -134,35 +187,52 @@ const getDelayed = async (req, res, next) => {
 };
 
 /**
- * 机房进度排行
+ * 机房进度排行 - 优化版，避免N+1查询
  */
 const getRoomRanking = async (req, res, next) => {
   try {
+    // 使用原生SQL获取所有机房的任务统计
+    const taskStats = await sequelize.query(
+      `SELECT room_id, COUNT(*) as total,
+              SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+       FROM room_tasks
+       GROUP BY room_id`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+
+    // 构建统计映射
+    const statsMap = {};
+    taskStats.forEach(stat => {
+      statsMap[stat.room_id] = {
+        total: parseInt(stat.total) || 0,
+        completed: parseInt(stat.completed) || 0
+      };
+    });
+
+    // 获取机房信息
     const rooms = await MachineRoom.findAll({
       include: [{
         model: User,
         as: 'manager',
         attributes: ['id', 'real_name']
       }],
-      order: [['created_at', 'DESC']]
+      order: [['created_at', 'DESC']],
+      raw: true,
+      nest: true
     });
 
-    const result = await Promise.all(rooms.map(async (room) => {
-      const total = await RoomTask.count({ where: { room_id: room.id } });
-      const completed = await RoomTask.count({
-        where: { room_id: room.id, status: 'completed' }
-      });
-
+    const result = rooms.map(room => {
+      const stats = statsMap[room.id] || { total: 0, completed: 0 };
       return {
         id: room.id,
         name: room.name,
         status: room.status,
         manager: room.manager,
-        total,
-        completed,
-        progress: total > 0 ? Math.round((completed / total) * 100) : 0
+        total: stats.total,
+        completed: stats.completed,
+        progress: stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0
       };
-    }));
+    });
 
     // 按进度排序
     result.sort((a, b) => b.progress - a.progress);

@@ -24,6 +24,7 @@
             <el-option label="租赁" value="lease"></el-option>
             <el-option label="自建" value="self_build"></el-option>
             <el-option label="一体化集装箱" value="container"></el-option>
+            <el-option label="利旧" value="reuse"></el-option>
           </el-select>
           <div class="form-tip">{{ constructionTypeDesc }}</div>
         </el-form-item>
@@ -61,27 +62,38 @@
             <!-- 箭头 -->
             <div class="arrow-down">↓</div>
             <!-- 第2层 -->
-            <div class="level level-2">
+            <div class="level level-2" v-if="form.construction_type !== 'reuse'">
               <div class="node" v-if="form.construction_type !== 'container'">合同签订<span class="days">(3个月)</span></div>
               <div class="node" v-else>方案及用地确定<span class="days">(3个月)</span></div>
             </div>
+            <!-- 利旧类型第2层显示设计批复 -->
+            <div class="level level-2" v-if="form.construction_type === 'reuse'">
+              <div class="node">设计批复<span class="days">(3个月)</span></div>
+            </div>
             <!-- 分支箭头 -->
-            <div class="arrow-split">
+            <div class="arrow-split" v-if="form.construction_type !== 'reuse'">
               <span v-if="showShoufang">↙</span>
               <span>↓</span>
             </div>
+            <!-- 利旧类型跳过第3层 -->
+            <template v-if="form.construction_type === 'reuse'">
+              <div class="arrow-down">↓</div>
+              <div class="level level-4">
+                <div class="node">物资到货<span class="days">(1月+1周)</span></div>
+              </div>
+            </template>
             <!-- 第3层 -->
-            <div class="level level-3">
+            <div class="level level-3" v-if="form.construction_type !== 'reuse'">
               <div class="node" v-if="showShoufang">收房<span class="days">(1个月)</span></div>
               <div class="node">设计批复<span class="days">(1周)</span></div>
             </div>
             <!-- 箭头 -->
-            <div class="arrow-split">
+            <div class="arrow-split" v-if="form.construction_type !== 'reuse'">
               <span v-if="showShoufang">↓</span>
               <span>↓</span>
             </div>
             <!-- 第4层 -->
-            <div class="level level-4">
+            <div class="level level-4" v-if="form.construction_type !== 'reuse'">
               <div class="node" v-if="showChanquan">产权办理<span class="days">(2个月)</span></div>
               <div class="node">物资到货<span class="days">(1月+1周)</span></div>
             </div>
@@ -148,6 +160,7 @@
 <script>
 import { createRoom } from '@/api/room'
 import { getManagers } from '@/api/user'
+import { getConstructionTypeDesc } from '@/utils'
 
 export default {
   name: 'RoomCreate',
@@ -165,7 +178,13 @@ export default {
         description: ''
       },
       rules: {
-        name: [{ required: true, message: '请输入机房名称', trigger: 'blur' }],
+        name: [
+          { required: true, message: '请输入机房名称', trigger: 'blur' },
+          { min: 2, max: 50, message: '长度在 2 到 50 个字符', trigger: 'blur' }
+        ],
+        code: [
+          { pattern: /^[A-Za-z0-9_-]*$/, message: '编码只能包含字母、数字、下划线和横线', trigger: 'blur' }
+        ],
         planned_start_date: [{ required: true, message: '请选择项目开始日期', trigger: 'change' }],
         construction_type: [{ required: true, message: '请选择建设方式', trigger: 'change' }]
       }
@@ -173,20 +192,14 @@ export default {
   },
   computed: {
     constructionTypeDesc() {
-      const descs = {
-        purchase: '购置类：包含收房、产权办理流程（13个节点）',
-        lease: '租赁类：包含收房流程，无产权办理（12个节点）',
-        self_build: '自建类：包含收房流程，无产权办理（12个节点）',
-        container: '一体化集装箱：方案及用地确定，无收房、无产权办理（11个节点）'
-      }
-      return descs[this.form.construction_type] || ''
+      return getConstructionTypeDesc(this.form.construction_type)
     },
     showShoufang() {
       return ['purchase', 'lease', 'self_build'].includes(this.form.construction_type)
     },
     showChanquan() {
       return this.form.construction_type === 'purchase'
-    }
+    },
   },
   created() {
     this.loadManagers()
@@ -207,6 +220,16 @@ export default {
       this.$refs.form.validate(async valid => {
         if (!valid) return
 
+        try {
+          await this.$confirm(
+            `确定创建机房"${this.form.name}"吗？创建后将自动生成${this.getTaskCount()}个任务节点。`,
+            '确认创建',
+            { type: 'info' }
+          )
+        } catch {
+          return
+        }
+
         this.loading = true
         try {
           await createRoom(this.form)
@@ -218,6 +241,16 @@ export default {
           this.loading = false
         }
       })
+    },
+    getTaskCount() {
+      const counts = {
+        purchase: 13,
+        lease: 12,
+        self_build: 12,
+        container: 11,
+        reuse: 10
+      }
+      return counts[this.form.construction_type] || 0
     },
     goBack() {
       this.$router.back()

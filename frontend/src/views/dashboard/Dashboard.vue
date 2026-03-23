@@ -10,7 +10,7 @@
       </el-col>
       <el-col :span="6">
         <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
-          <div class="stat-value">{{ overview.rooms?.inProgress || 0 }}</div>
+          <div class="stat-value">{{ overview.rooms?.in_progress || 0 }}</div>
           <div class="stat-label">建设中</div>
         </div>
       </el-col>
@@ -30,7 +30,7 @@
 
     <!-- 进度概览 -->
     <el-row :gutter="20" style="margin-top: 20px;">
-      <el-col :span="12">
+      <el-col :span="8">
         <el-card header="总体进度">
           <div class="progress-circle">
             <el-progress
@@ -44,7 +44,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="12">
+      <el-col :span="8">
         <el-card header="各阶段进度">
           <div v-for="phase in phaseStats" :key="phase.id" class="phase-item">
             <div class="phase-name">{{ phase.name }}</div>
@@ -52,6 +52,20 @@
               :percentage="phase.percentage"
               :status="phase.percentage === 100 ? 'success' : ''"
             ></el-progress>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="8">
+        <el-card header="建设方式分布">
+          <div v-for="(count, type) in constructionTypeStats" :key="type" class="type-item">
+            <div class="type-name">{{ getConstructionTypeText(type) }}</div>
+            <div class="type-bar">
+              <div class="type-count">{{ count }} 个</div>
+              <el-progress
+                :percentage="getConstructionPercentage(count)"
+                :show-text="false"
+              ></el-progress>
+            </div>
           </div>
         </el-card>
       </el-col>
@@ -95,6 +109,7 @@
 <script>
 import { getOverview, getByPhase, getRanking } from '@/api/statistics'
 import { getRooms } from '@/api/room'
+import { getRoomStatusText, getRoomStatusType, getConstructionTypeText } from '@/utils'
 
 export default {
   name: 'Dashboard',
@@ -102,7 +117,13 @@ export default {
     return {
       overview: {},
       phaseStats: [],
-      rooms: []
+      rooms: [],
+      constructionTypeStats: {}
+    }
+  },
+  computed: {
+    totalRooms() {
+      return this.overview.rooms?.total || 0
     }
   },
   created() {
@@ -119,28 +140,22 @@ export default {
         this.overview = overviewRes.data
         this.phaseStats = phaseRes.data
         this.rooms = roomsRes.data.list
+        this.constructionTypeStats = overviewRes.data.constructionTypes || {}
       } catch (error) {
         console.error(error)
       }
     },
+    getConstructionPercentage(count) {
+      if (this.totalRooms === 0) return 0
+      return Math.round((count / this.totalRooms) * 100)
+    },
     getStatusType(status) {
-      const types = {
-        planning: 'info',
-        in_progress: 'warning',
-        completed: 'success',
-        paused: 'danger'
-      }
-      return types[status] || 'info'
+      return getRoomStatusType(status)
     },
     getStatusText(status) {
-      const texts = {
-        planning: '规划中',
-        in_progress: '建设中',
-        completed: '已完成',
-        paused: '已暂停'
-      }
-      return texts[status] || status
+      return getRoomStatusText(status)
     },
+    getConstructionTypeText,
     goToDetail(id) {
       this.$router.push(`/rooms/${id}`)
     }
@@ -189,5 +204,31 @@ export default {
   margin-bottom: 5px;
   font-size: 14px;
   color: #666;
+}
+
+.type-item {
+  margin-bottom: 15px;
+}
+
+.type-name {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.type-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.type-count {
+  font-size: 13px;
+  color: #999;
+  min-width: 50px;
+}
+
+.type-bar .el-progress {
+  flex: 1;
 }
 </style>

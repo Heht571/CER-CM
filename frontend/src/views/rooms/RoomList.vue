@@ -8,23 +8,38 @@
         </el-form-item>
         <el-form-item label="建设方式">
           <el-select v-model="searchForm.construction_type" placeholder="全部" clearable>
-            <el-option label="购置" value="purchase"></el-option>
-            <el-option label="租赁" value="lease"></el-option>
-            <el-option label="自建" value="self_build"></el-option>
-            <el-option label="一体化集装箱" value="container"></el-option>
+            <el-option
+              v-for="item in constructionTypeOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            ></el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="全部" clearable>
-            <el-option label="规划中" value="planning"></el-option>
-            <el-option label="建设中" value="in_progress"></el-option>
-            <el-option label="已完成" value="completed"></el-option>
-            <el-option label="已暂停" value="paused"></el-option>
+            <el-option
+              v-for="item in roomStatusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            ></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="负责人">
+          <el-select v-model="searchForm.manager_id" placeholder="全部" clearable>
+            <el-option
+              v-for="manager in managers"
+              :key="manager.id"
+              :label="manager.real_name"
+              :value="manager.id"
+            ></el-option>
           </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
+          <el-button type="info" @click="handleExport">导出</el-button>
           <el-button v-if="isAdmin" type="success" @click="goToCreate">新建机房</el-button>
         </el-form-item>
       </el-form>
@@ -48,8 +63,8 @@
         </el-table-column>
         <el-table-column label="状态" width="100">
           <template slot-scope="scope">
-            <el-tag :type="getStatusType(scope.row.status)">
-              {{ getStatusText(scope.row.status) }}
+            <el-tag :type="getRoomStatusType(scope.row.status)">
+              {{ getRoomStatusText(scope.row.status) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -93,7 +108,19 @@
 
 <script>
 import { getRooms, deleteRoom } from '@/api/room'
+import { getManagers } from '@/api/user'
 import { mapGetters } from 'vuex'
+import {
+  ROOM_STATUS_OPTIONS,
+  CONSTRUCTION_TYPE_OPTIONS
+} from '@/utils/constants'
+import {
+  getRoomStatusText,
+  getRoomStatusType,
+  getConstructionTypeText,
+  formatDate,
+  exportToExcel
+} from '@/utils'
 
 export default {
   name: 'RoomList',
@@ -101,14 +128,19 @@ export default {
     return {
       loading: false,
       rooms: [],
+      managers: [],
       total: 0,
       page: 1,
       pageSize: 10,
       searchForm: {
         keyword: '',
         status: '',
-        construction_type: ''
-      }
+        construction_type: '',
+        manager_id: ''
+      },
+      // 常量
+      roomStatusOptions: ROOM_STATUS_OPTIONS,
+      constructionTypeOptions: CONSTRUCTION_TYPE_OPTIONS
     }
   },
   computed: {
@@ -116,6 +148,7 @@ export default {
   },
   created() {
     this.loadRooms()
+    this.loadManagers()
   },
   methods: {
     async loadRooms() {
@@ -134,12 +167,20 @@ export default {
         this.loading = false
       }
     },
+    async loadManagers() {
+      try {
+        const res = await getManagers()
+        this.managers = res.data
+      } catch (error) {
+        console.error(error)
+      }
+    },
     handleSearch() {
       this.page = 1
       this.loadRooms()
     },
     handleReset() {
-      this.searchForm = { keyword: '', status: '', construction_type: '' }
+      this.searchForm = { keyword: '', status: '', construction_type: '', manager_id: '' }
       this.handleSearch()
     },
     handlePageChange(page) {
@@ -174,37 +215,33 @@ export default {
         }
       }
     },
-    getStatusType(status) {
-      const types = {
-        planning: 'info',
-        in_progress: 'warning',
-        completed: 'success',
-        paused: 'danger'
-      }
-      return types[status] || 'info'
+    handleExport() {
+      const headers = [
+        { prop: 'code', label: '机房编码' },
+        { prop: 'name', label: '机房名称' },
+        { prop: 'construction_type', label: '建设方式' },
+        { prop: 'location', label: '位置' },
+        { prop: 'manager_name', label: '负责人' },
+        { prop: 'status_text', label: '状态' },
+        { prop: 'progress', label: '进度(%)' },
+        { prop: 'created_at', label: '创建时间' }
+      ]
+      const data = this.rooms.map(room => ({
+        ...room,
+        construction_type: getConstructionTypeText(room.construction_type),
+        manager_name: room.manager?.real_name || '未分配',
+        status_text: getRoomStatusText(room.status),
+        progress: room.progress || 0,
+        created_at: formatDate(room.created_at)
+      }))
+      exportToExcel(data, '机房列表', headers)
+      this.$message.success('导出成功')
     },
-    getStatusText(status) {
-      const texts = {
-        planning: '规划中',
-        in_progress: '建设中',
-        completed: '已完成',
-        paused: '已暂停'
-      }
-      return texts[status] || status
-    },
-    getConstructionTypeText(type) {
-      const texts = {
-        purchase: '购置',
-        lease: '租赁',
-        self_build: '自建',
-        container: '一体化集装箱'
-      }
-      return texts[type] || type
-    },
-    formatDate(date) {
-      if (!date) return ''
-      return new Date(date).toLocaleDateString()
-    }
+    // 使用工具函数
+    getRoomStatusText,
+    getRoomStatusType,
+    getConstructionTypeText,
+    formatDate
   }
 }
 </script>

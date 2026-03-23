@@ -37,6 +37,52 @@
           <p>进行中: {{ progress.inProgressTasks }} 个任务</p>
         </div>
       </div>
+      <!-- 耗时统计 -->
+      <el-divider></el-divider>
+      <div class="time-stats">
+        <div class="stat-item">
+          <span class="label">项目开始日期：</span>
+          <span class="value">{{ formatDate(room.planned_start_date) }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">预计结束日期：</span>
+          <span class="value">{{ formatDate(room.planned_end_date) }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">预计总工期：</span>
+          <span class="value">{{ calculateTotalDays() }} 天</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">已用时间：</span>
+          <span class="value">{{ calculateElapsedDays() }} 天</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">剩余时间：</span>
+          <span class="value" :class="{ 'text-danger': isOverdue() }">{{ calculateRemainingDays() }} 天</span>
+        </div>
+        <div class="stat-item" v-if="isOverdue()">
+          <span class="label text-danger">延期天数：</span>
+          <span class="value text-danger">{{ calculateOverdueDays() }} 天</span>
+        </div>
+      </div>
+      <!-- 进度对比 -->
+      <el-divider></el-divider>
+      <div class="progress-comparison">
+        <div class="comparison-item">
+          <span class="label">计划进度：</span>
+          <el-progress :percentage="calculatePlannedProgress()" :show-text="false" color="#909399"></el-progress>
+          <span class="percent">{{ calculatePlannedProgress() }}%</span>
+        </div>
+        <div class="comparison-item">
+          <span class="label">实际进度：</span>
+          <el-progress :percentage="progress.overall || 0" :show-text="false"></el-progress>
+          <span class="percent" :class="{ 'text-danger': progress.overall < calculatePlannedProgress() }">{{ progress.overall || 0 }}%</span>
+        </div>
+        <div class="comparison-item">
+          <span class="label">进度偏差：</span>
+          <span :class="getDeviationClass()">{{ getDeviationText() }}</span>
+        </div>
+      </div>
     </el-card>
 
     <!-- 网络流程图 -->
@@ -205,6 +251,15 @@ import { updateTaskStatus, updateTaskProgress } from '@/api/task'
 import { getManagers } from '@/api/user'
 import { mapGetters } from 'vuex'
 import NetworkGraph from '@/components/NetworkGraph.vue'
+import {
+  getTaskStatusText,
+  getTaskStatusType,
+  getRoomStatusText,
+  getRoomStatusType,
+  getConstructionTypeText,
+  formatDate,
+  formatDateTime
+} from '@/utils'
 
 export default {
   name: 'RoomDetail',
@@ -300,13 +355,24 @@ export default {
       this.assignDialogVisible = true
     },
     async handleAssign() {
+      if (!this.selectedManagerId) {
+        this.$message.warning('请选择负责人')
+        return
+      }
       try {
+        await this.$confirm(
+          `确定将机房"${this.room.name}"分配给该负责人吗？`,
+          '确认分配',
+          { type: 'warning' }
+        )
         await assignManager(this.roomId, { manager_id: this.selectedManagerId })
         this.$message.success('分配成功')
         this.assignDialogVisible = false
         this.loadData()
       } catch (error) {
-        console.error(error)
+        if (error !== 'cancel') {
+          console.error(error)
+        }
       }
     },
     showStatusDialog() {
@@ -314,13 +380,29 @@ export default {
       this.statusDialogVisible = true
     },
     async handleStatusUpdate() {
+      if (!this.selectedStatus) {
+        this.$message.warning('请选择状态')
+        return
+      }
+      if (this.selectedStatus === this.room.status) {
+        this.$message.info('状态未变更')
+        this.statusDialogVisible = false
+        return
+      }
       try {
+        await this.$confirm(
+          `确定将机房状态从"${getRoomStatusText(this.room.status)}"改为"${getRoomStatusText(this.selectedStatus)}"吗？`,
+          '确认更新',
+          { type: 'warning' }
+        )
         await updateRoomStatus(this.roomId, { status: this.selectedStatus })
         this.$message.success('状态更新成功')
         this.statusDialogVisible = false
         this.loadData()
       } catch (error) {
-        console.error(error)
+        if (error !== 'cancel') {
+          console.error(error)
+        }
       }
     },
     showTaskDialog(task) {
@@ -333,6 +415,24 @@ export default {
       this.taskDialogVisible = true
     },
     async handleTaskUpdate() {
+      // 数据校验：进度必须与状态匹配
+      if (this.taskForm.status === 'completed' && this.taskForm.progress !== 100) {
+        this.$message.warning('任务完成时进度必须为100%')
+        return
+      }
+      if (this.taskForm.status === 'not_started' && this.taskForm.progress > 0) {
+        this.$message.warning('任务未开始时进度应为0%')
+        return
+      }
+      // 检查是否有变更
+      if (
+        this.taskForm.status === this.currentTask.status &&
+        this.taskForm.progress === this.currentTask.progress &&
+        !this.taskForm.remark
+      ) {
+        this.$message.info('没有任何变更')
+        return
+      }
       try {
         if (this.taskForm.status !== this.currentTask.status) {
           await updateTaskStatus(this.currentTask.id, {
@@ -354,48 +454,78 @@ export default {
         console.error(error)
       }
     },
-    getStatusType(status) {
-      const types = { planning: 'info', in_progress: 'warning', completed: 'success', paused: 'danger' }
-      return types[status] || 'info'
-    },
-    getStatusText(status) {
-      const texts = { planning: '规划中', in_progress: '建设中', completed: '已完成', paused: '已暂停' }
-      return texts[status] || status
-    },
-    getTaskStatusType(status) {
-      const types = { not_started: 'info', in_progress: 'warning', completed: 'success' }
-      return types[status] || 'info'
-    },
-    getTaskStatusText(status) {
-      const texts = { not_started: '未开始', in_progress: '进行中', completed: '已完成' }
-      return texts[status] || status
-    },
-    formatDate(date) {
-      if (!date) return '-'
-      return new Date(date).toLocaleDateString()
-    },
-    formatDateTime(date) {
-      if (!date) return '-'
-      return new Date(date).toLocaleString()
-    },
+    // 使用共享工具函数
+    getStatusType: getRoomStatusType,
+    getStatusText: getRoomStatusText,
+    getTaskStatusType,
+    getTaskStatusText,
+    formatDate,
+    formatDateTime,
+    getConstructionTypeText,
     getLogContent(log) {
       const parts = []
       if (log.old_status && log.new_status) {
-        parts.push(`状态: ${this.getTaskStatusText(log.old_status)} → ${this.getTaskStatusText(log.new_status)}`)
+        parts.push(`状态: ${getTaskStatusText(log.old_status)} → ${getTaskStatusText(log.new_status)}`)
       }
       if (log.old_progress !== null && log.new_progress !== null) {
         parts.push(`进度: ${log.old_progress}% → ${log.new_progress}%`)
       }
       return parts.join(' | ') || log.remark || '更新'
     },
-    getConstructionTypeText(type) {
-      const texts = {
-        purchase: '购置',
-        lease: '租赁',
-        self_build: '自建',
-        container: '一体化集装箱'
-      }
-      return texts[type] || type
+    // 时间统计方法
+    calculateTotalDays() {
+      if (!this.room.planned_start_date || !this.room.planned_end_date) return '-'
+      const start = new Date(this.room.planned_start_date)
+      const end = new Date(this.room.planned_end_date)
+      return Math.ceil((end - start) / (1000 * 60 * 60 * 24))
+    },
+    calculateElapsedDays() {
+      if (!this.room.planned_start_date) return '-'
+      const start = new Date(this.room.planned_start_date)
+      const today = new Date()
+      const elapsed = Math.ceil((today - start) / (1000 * 60 * 60 * 24))
+      return Math.max(0, elapsed)
+    },
+    calculateRemainingDays() {
+      if (!this.room.planned_end_date) return '-'
+      const end = new Date(this.room.planned_end_date)
+      const today = new Date()
+      const remaining = Math.ceil((end - today) / (1000 * 60 * 60 * 24))
+      return Math.max(0, remaining)
+    },
+    isOverdue() {
+      if (!this.room.planned_end_date) return false
+      const end = new Date(this.room.planned_end_date)
+      const today = new Date()
+      return today > end && this.room.status !== 'completed'
+    },
+    calculateOverdueDays() {
+      if (!this.room.planned_end_date) return 0
+      const end = new Date(this.room.planned_end_date)
+      const today = new Date()
+      return Math.max(0, Math.ceil((today - end) / (1000 * 60 * 60 * 24)))
+    },
+    calculatePlannedProgress() {
+      if (!this.room.planned_start_date || !this.room.planned_end_date) return 0
+      const start = new Date(this.room.planned_start_date)
+      const end = new Date(this.room.planned_end_date)
+      const today = new Date()
+      const total = end - start
+      const elapsed = today - start
+      if (elapsed <= 0) return 0
+      if (elapsed >= total) return 100
+      return Math.round((elapsed / total) * 100)
+    },
+    getDeviationClass() {
+      const deviation = (this.progress.overall || 0) - this.calculatePlannedProgress()
+      if (deviation >= 0) return 'text-success'
+      return 'text-danger'
+    },
+    getDeviationText() {
+      const deviation = (this.progress.overall || 0) - this.calculatePlannedProgress()
+      if (deviation > 0) return `超前 ${deviation}%`
+      if (deviation < 0) return `落后 ${Math.abs(deviation)}%`
+      return '进度正常'
     }
   }
 }
@@ -406,6 +536,47 @@ export default {
 .card-header { display: flex; justify-content: space-between; align-items: center; }
 .progress-overview { display: flex; align-items: center; gap: 30px; }
 .progress-text { color: #666; line-height: 2; }
+.time-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+}
+.stat-item {
+  display: flex;
+  align-items: center;
+}
+.stat-item .label {
+  color: #909399;
+  margin-right: 8px;
+}
+.stat-item .value {
+  font-weight: 500;
+  color: #303133;
+}
+.progress-comparison {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.comparison-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.comparison-item .label {
+  width: 80px;
+  color: #606266;
+}
+.comparison-item .el-progress {
+  flex: 1;
+}
+.comparison-item .percent {
+  width: 50px;
+  text-align: right;
+  font-weight: 500;
+}
+.text-success { color: #67c23a; }
+.text-danger { color: #f56c6c; }
 .graph-legend {
   display: flex;
   gap: 20px;

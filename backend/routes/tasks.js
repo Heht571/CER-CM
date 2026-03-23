@@ -10,6 +10,12 @@ const { isAdmin } = require('../middleware/authorize');
 router.get('/', taskController.getList);
 
 /**
+ * @route GET /api/tasks/my-rooms
+ * @desc 获取我的机房任务（按机房分组，只显示当前待处理任务）
+ */
+router.get('/my-rooms', taskController.getMyRoomTasks);
+
+/**
  * @route GET /api/tasks/templates
  * @desc 获取任务模板列表（管理员）
  */

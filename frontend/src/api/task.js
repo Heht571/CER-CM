@@ -5,6 +5,11 @@ export function getTasks(params) {
   return request.get('/tasks', { params })
 }
 
+// 获取我的机房任务（按机房分组，只显示当前待处理任务）
+export function getMyRoomTasks() {
+  return request.get('/tasks/my-rooms')
+}
+
 // 获取任务详情
 export function getTaskDetail(id) {
   return request.get(`/tasks/${id}`)

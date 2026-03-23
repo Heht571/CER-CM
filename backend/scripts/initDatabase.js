@@ -71,7 +71,7 @@ const initDatabase = async () => {
         graph_level: 1,
         graph_row: 2,
         sort_order: 1,
-        applicable_types: ['purchase', 'lease', 'self_build', 'container']
+        applicable_types: ['purchase', 'lease', 'self_build', 'container', 'reuse']
       },
 
       // ========== 第2层 - 合同签订/方案确定 ==========
@@ -97,6 +97,17 @@ const initDatabase = async () => {
         sort_order: 14,
         applicable_types: ['container']
       },
+      // 设计批复（利旧专用，包含3个月等待时间）
+      {
+        id: 15,
+        phase_id: 3,
+        name: '设计批复',
+        planned_days: 97, // 3个月+1周
+        graph_level: 2,
+        graph_row: 2,
+        sort_order: 15,
+        applicable_types: ['reuse']
+      },
 
       // ========== 第3层 - 分支点 ==========
       // 收房（购置、租赁、自建）
@@ -110,7 +121,7 @@ const initDatabase = async () => {
         sort_order: 3,
         applicable_types: ['purchase', 'lease', 'self_build']
       },
-      // 设计批复（所有类型）
+      // 设计批复（购置、租赁、自建、集装箱）
       {
         id: 4,
         phase_id: 3,
@@ -143,7 +154,7 @@ const initDatabase = async () => {
         graph_level: 4,
         graph_row: 3,
         sort_order: 6,
-        applicable_types: ['purchase', 'lease', 'self_build', 'container']
+        applicable_types: ['purchase', 'lease', 'self_build', 'container', 'reuse']
       },
 
       // ========== 第5层 - 三分支 ==========
@@ -155,7 +166,7 @@ const initDatabase = async () => {
         graph_level: 5,
         graph_row: 2,
         sort_order: 7,
-        applicable_types: ['purchase', 'lease', 'self_build', 'container']
+        applicable_types: ['purchase', 'lease', 'self_build', 'container', 'reuse']
       },
       {
         id: 8,
@@ -165,7 +176,7 @@ const initDatabase = async () => {
         graph_level: 5,
         graph_row: 3,
         sort_order: 8,
-        applicable_types: ['purchase', 'lease', 'self_build', 'container']
+        applicable_types: ['purchase', 'lease', 'self_build', 'container', 'reuse']
       },
       {
         id: 9,
@@ -175,7 +186,7 @@ const initDatabase = async () => {
         graph_level: 5,
         graph_row: 4,
         sort_order: 9,
-        applicable_types: ['purchase', 'lease', 'self_build', 'container']
+        applicable_types: ['purchase', 'lease', 'self_build', 'container', 'reuse']
       },
 
       // ========== 第6层 ==========
@@ -187,7 +198,7 @@ const initDatabase = async () => {
         graph_level: 6,
         graph_row: 3,
         sort_order: 10,
-        applicable_types: ['purchase', 'lease', 'self_build', 'container']
+        applicable_types: ['purchase', 'lease', 'self_build', 'container', 'reuse']
       },
       {
         id: 11,
@@ -197,7 +208,7 @@ const initDatabase = async () => {
         graph_level: 6,
         graph_row: 4,
         sort_order: 11,
-        applicable_types: ['purchase', 'lease', 'self_build', 'container']
+        applicable_types: ['purchase', 'lease', 'self_build', 'container', 'reuse']
       },
 
       // ========== 第7层 ==========
@@ -209,7 +220,7 @@ const initDatabase = async () => {
         graph_level: 7,
         graph_row: 3,
         sort_order: 12,
-        applicable_types: ['purchase', 'lease', 'self_build', 'container']
+        applicable_types: ['purchase', 'lease', 'self_build', 'container', 'reuse']
       },
 
       // ========== 第8层 - 终点 ==========
@@ -221,7 +232,7 @@ const initDatabase = async () => {
         graph_level: 8,
         graph_row: 3,
         sort_order: 13,
-        applicable_types: ['purchase', 'lease', 'self_build', 'container']
+        applicable_types: ['purchase', 'lease', 'self_build', 'container', 'reuse']
       }
     ];
 
@@ -233,15 +244,19 @@ const initDatabase = async () => {
     // 创建节点依赖关系
     const dependencies = [
       // 购置/租赁/自建路径
-      { task_id: 2, prev_task_id: 1 },  // 合同签订 → 立项批复
-      { task_id: 3, prev_task_id: 2 },  // 收房 → 合同签订
-      { task_id: 4, prev_task_id: 2 },  // 设计批复 → 合同签订
-      { task_id: 5, prev_task_id: 3 },  // 产权办理 → 收房
-      { task_id: 6, prev_task_id: 4 },  // 物资到货 → 设计批复
+      { task_id: 2, prev_task_id: 1, applicable_types: ['purchase', 'lease', 'self_build'] },  // 合同签订 → 立项批复
+      { task_id: 3, prev_task_id: 2, applicable_types: ['purchase', 'lease', 'self_build'] },  // 收房 → 合同签订
+      { task_id: 4, prev_task_id: 2, applicable_types: ['purchase', 'lease', 'self_build'] },  // 设计批复 → 合同签订
+      { task_id: 5, prev_task_id: 3, applicable_types: ['purchase'] },  // 产权办理 → 收房（仅购置）
+      { task_id: 6, prev_task_id: 4, applicable_types: ['purchase', 'lease', 'self_build', 'container'] },  // 物资到货 → 设计批复
 
       // 一体化集装箱路径
-      { task_id: 14, prev_task_id: 1 }, // 方案及用地确定 → 立项批复
-      { task_id: 4, prev_task_id: 14 }, // 设计批复 → 方案及用地确定（一体化集装箱）
+      { task_id: 14, prev_task_id: 1, applicable_types: ['container'] }, // 方案及用地确定 → 立项批复
+      { task_id: 4, prev_task_id: 14, applicable_types: ['container'] }, // 设计批复 → 方案及用地确定
+
+      // 利旧路径
+      { task_id: 15, prev_task_id: 1, applicable_types: ['reuse'] },  // 设计批复（含等待） → 立项批复
+      { task_id: 6, prev_task_id: 15, applicable_types: ['reuse'] },  // 物资到货 → 设计批复（利旧）
 
       // 共用后续流程（物资到货后的三分支）
       { task_id: 7, prev_task_id: 6 },  // 外市电完成 → 物资到货
@@ -270,6 +285,7 @@ const initDatabase = async () => {
     console.log('- 租赁类: 12个节点（含收房、无产权办理）');
     console.log('- 自建类: 12个节点（含收房、无产权办理）');
     console.log('- 一体化集装箱: 11个节点（方案及用地确定，无收房、无产权办理）');
+    console.log('- 利旧: 10个节点（立项批复→设计批复3个月，无合同签订、无收房、无产权办理）');
 
     process.exit(0);
   } catch (error) {

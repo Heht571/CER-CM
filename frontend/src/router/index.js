@@ -36,6 +36,12 @@ const routes = [
         meta: { title: '创建机房', requiresAuth: true, requiresAdmin: true }
       },
       {
+        path: 'rooms/:id/edit',
+        name: 'RoomEdit',
+        component: () => import('@/views/rooms/RoomEdit.vue'),
+        meta: { title: '编辑机房', requiresAuth: true, requiresAdmin: true }
+      },
+      {
         path: 'rooms/:id',
         name: 'RoomDetail',
         component: () => import('@/views/rooms/RoomDetail.vue'),

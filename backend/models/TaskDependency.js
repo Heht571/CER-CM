@@ -18,6 +18,11 @@ TaskDependency.init({
     type: DataTypes.INTEGER,
     allowNull: false,
     comment: '前置任务节点ID'
+  },
+  applicable_types: {
+    type: DataTypes.JSON,
+    defaultValue: ['purchase', 'lease', 'self_build', 'container', 'reuse'],
+    comment: '适用的建设方式，null表示所有类型'
   }
 }, {
   sequelize,

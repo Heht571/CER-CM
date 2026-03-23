@@ -1,6 +1,138 @@
-const { RoomTask, MachineRoom, ConstructionPhase, TaskProgressLog, TaskTemplate, User, sequelize } = require('../models');
+const { RoomTask, MachineRoom, ConstructionPhase, TaskProgressLog, TaskTemplate, TaskDependency, User, sequelize } = require('../models');
 const { success, fail, paginate } = require('../utils/response');
 const { Op } = require('sequelize');
+
+/**
+ * 获取我的机房任务（按机房分组，只显示当前待处理任务）
+ */
+const getMyRoomTasks = async (req, res, next) => {
+  try {
+    // 获取用户负责的机房（管理员看所有）
+    let rooms;
+    if (req.user.role === 'admin') {
+      rooms = await MachineRoom.findAll({
+        include: [{
+          model: User,
+          as: 'manager',
+          attributes: ['id', 'real_name', 'phone']
+        }],
+        order: [['created_at', 'DESC']]
+      });
+    } else {
+      rooms = await MachineRoom.findAll({
+        where: { manager_id: req.userId },
+        include: [{
+          model: User,
+          as: 'manager',
+          attributes: ['id', 'real_name', 'phone']
+        }],
+        order: [['created_at', 'DESC']]
+      });
+    }
+
+    // 获取每个机房的当前任务
+    const result = await Promise.all(rooms.map(async (room) => {
+      // 获取该机房所有任务
+      const tasks = await RoomTask.findAll({
+        where: { room_id: room.id },
+        include: [{
+          model: ConstructionPhase,
+          as: 'phase',
+          attributes: ['id', 'name', 'phase_number']
+        }],
+        order: [['id', 'ASC']]
+      });
+
+      if (tasks.length === 0) {
+        return {
+          room: room.toJSON(),
+          currentTasks: [],
+          totalTasks: 0,
+          completedTasks: 0,
+          inProgressTasks: 0,
+          delayedTasks: 0,
+          overallProgress: 0
+        };
+      }
+
+      // 获取所有任务的模板ID
+      const templateIds = tasks.map(t => t.template_id);
+
+      // 获取任务模板的依赖关系（前置任务）
+      const dependencies = await TaskDependency.findAll({
+        where: { task_id: { [Op.in]: templateIds } }
+      });
+
+      // 构建依赖映射：template_id -> [prev_template_ids]
+      const dependencyMap = {};
+      dependencies.forEach(dep => {
+        // 过滤适用类型
+        const applicableTypes = dep.applicable_types || ['purchase', 'lease', 'self_build', 'container', 'reuse'];
+        if (applicableTypes.includes(room.construction_type)) {
+          if (!dependencyMap[dep.task_id]) {
+            dependencyMap[dep.task_id] = [];
+          }
+          dependencyMap[dep.task_id].push(dep.prev_task_id);
+        }
+      });
+
+      // 构建模板ID到任务的映射
+      const templateToTask = {};
+      tasks.forEach(t => {
+        templateToTask[t.template_id] = t;
+      });
+
+      // 找到所有当前待处理任务（未完成且所有前置任务已完成的任务）
+      const currentTasks = [];
+      for (const task of tasks) {
+        if (task.status === 'completed') continue;
+
+        // 检查所有前置任务是否已完成
+        const prevTemplateIds = dependencyMap[task.template_id] || [];
+        const allDepsCompleted = prevTemplateIds.every(prevId => {
+          const prevTask = templateToTask[prevId];
+          return prevTask && prevTask.status === 'completed';
+        });
+
+        if (allDepsCompleted) {
+          currentTasks.push({
+            ...task.toJSON(),
+            room: room.toJSON()
+          });
+        }
+      }
+
+      // 统计
+      const totalTasks = tasks.length;
+      const completedTasks = tasks.filter(t => t.status === 'completed').length;
+      const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
+
+      // 延期任务
+      const today = new Date();
+      const delayedTasks = tasks.filter(t =>
+        t.status !== 'completed' &&
+        t.planned_end_date &&
+        new Date(t.planned_end_date) < today
+      ).length;
+
+      const overallProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+      return {
+        room: room.toJSON(),
+        currentTasks,
+        totalTasks,
+        completedTasks,
+        inProgressTasks,
+        delayedTasks,
+        overallProgress
+      };
+    }));
+
+    success(res, result);
+  } catch (error) {
+    next(error);
+  }
+};
 
 /**
  * 获取任务列表
@@ -39,7 +171,7 @@ const getList = async (req, res, next) => {
           attributes: ['id', 'name', 'phase_number']
         }
       ],
-      order: [['room_id', 'ASC'], ['phase_id', 'ASC'], ['sort_order', 'ASC']],
+      order: [['room_id', 'ASC'], ['phase_id', 'ASC'], ['id', 'ASC']],
       offset: (page - 1) * pageSize,
       limit: parseInt(pageSize)
     });
@@ -379,6 +511,7 @@ function getStatusLabel(status) {
 }
 
 module.exports = {
+  getMyRoomTasks,
   getList,
   getDetail,
   updateStatus,

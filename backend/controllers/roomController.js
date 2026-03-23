@@ -25,8 +25,13 @@ function calculateTaskDates(nodes, dependencies, startDate, constructionType) {
     nodeMap[node.id] = { ...node.toJSON(), planned_start_date: null, planned_end_date: null };
   });
 
-  // 构建依赖关系映射（只保留两个节点都存在的依赖）
+  // 构建依赖关系映射（只保留两个节点都存在且适用于当前建设方式的依赖）
   dependencies.forEach(dep => {
+    // 检查依赖是否适用于当前建设方式
+    const depTypes = dep.applicable_types || ['purchase', 'lease', 'self_build', 'container', 'reuse'];
+    if (!depTypes.includes(constructionType)) {
+      return;
+    }
     // 只有当两个节点都存在时才添加依赖
     if (nodeMap[dep.task_id] && nodeMap[dep.prev_task_id]) {
       if (!depMap[dep.task_id]) {
@@ -450,7 +455,7 @@ const getTasks = async (req, res, next) => {
       order: [['template_id', 'ASC']]
     });
 
-    // 获取依赖关系（只保留实际存在的任务之间的依赖）
+    // 获取依赖关系
     const dependencies = await TaskDependency.findAll();
 
     // 构建节点列表
@@ -473,7 +478,13 @@ const getTasks = async (req, res, next) => {
       templateToTask[task.template_id] = task.id;
     });
 
+    const constructionType = room.construction_type;
     const edges = dependencies
+      .filter(dep => {
+        // 只保留适用于当前建设方式的依赖
+        const depTypes = dep.applicable_types || ['purchase', 'lease', 'self_build', 'container', 'reuse'];
+        return depTypes.includes(constructionType);
+      })
       .map(dep => ({
         source: templateToTask[dep.prev_task_id],
         target: templateToTask[dep.task_id]
