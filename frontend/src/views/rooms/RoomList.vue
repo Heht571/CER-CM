@@ -2,7 +2,7 @@
   <div class="room-list">
     <!-- 搜索栏 -->
     <el-card class="search-card">
-      <el-form :inline="true" :model="searchForm">
+      <el-form :inline="!isMobile" :model="searchForm">
         <el-form-item label="关键字">
           <el-input v-model="searchForm.keyword" placeholder="机房名称/编码" clearable></el-input>
         </el-form-item>
@@ -39,15 +39,60 @@
         <el-form-item>
           <el-button type="primary" @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
-          <el-button type="info" @click="handleExport">导出</el-button>
-          <el-button v-if="isAdmin" type="success" @click="goToCreate">新建机房</el-button>
+          <el-button v-if="!isMobile" type="info" @click="handleExport">导出</el-button>
+          <el-button v-if="isAdmin && !isMobile" type="success" @click="goToCreate">新建机房</el-button>
+        </el-form-item>
+        <!-- 移动端操作按钮 -->
+        <el-form-item v-if="isMobile">
+          <el-button v-if="isAdmin" type="success" size="small" @click="goToCreate">
+            <i class="el-icon-plus"></i> 新建
+          </el-button>
+          <el-button type="info" size="small" @click="handleExport">
+            <i class="el-icon-download"></i>
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <!-- 机房列表 -->
     <el-card>
-      <el-table :data="rooms" v-loading="loading" style="width: 100%">
+      <!-- 移动端卡片列表 -->
+      <div v-if="isMobile" class="mobile-room-list">
+        <div v-for="room in rooms" :key="room.id" class="mobile-room-card" @click="goToDetail(room.id)">
+          <div class="room-header">
+            <div class="room-title">
+              <span class="room-name">{{ room.name }}</span>
+              <span class="room-code">{{ room.code }}</span>
+            </div>
+            <el-tag :type="getRoomStatusType(room.status)" size="small">
+              {{ getRoomStatusText(room.status) }}
+            </el-tag>
+          </div>
+          <div class="room-info">
+            <div class="info-row">
+              <span class="label"><i class="el-icon-location"></i></span>
+              <span>{{ room.location || '未设置' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label"><i class="el-icon-user"></i></span>
+              <span>{{ room.manager?.real_name || '未分配' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">方式：</span>
+              <span>{{ getConstructionTypeText(room.construction_type) }}</span>
+            </div>
+          </div>
+          <div class="room-progress">
+            <el-progress :percentage="room.progress || 0" :show-text="true"></el-progress>
+          </div>
+          <div class="room-actions" v-if="isAdmin" @click.stop>
+            <el-button type="primary" size="mini" @click="goToEdit(room.id)">编辑</el-button>
+            <el-button type="danger" size="mini" plain @click="handleDelete(room)">删除</el-button>
+          </div>
+        </div>
+      </div>
+      <!-- PC端表格 -->
+      <el-table v-else :data="rooms" v-loading="loading" style="width: 100%">
         <el-table-column prop="code" label="机房编码" width="120"></el-table-column>
         <el-table-column prop="name" label="机房名称"></el-table-column>
         <el-table-column label="建设方式" width="120">
@@ -94,7 +139,7 @@
       <el-pagination
         style="margin-top: 20px; text-align: right;"
         background
-        layout="total, sizes, prev, pager, next"
+        :layout="isMobile ? 'total, prev, pager, next' : 'total, sizes, prev, pager, next'"
         :total="total"
         :page-size="pageSize"
         :current-page="page"
@@ -140,7 +185,8 @@ export default {
       },
       // 常量
       roomStatusOptions: ROOM_STATUS_OPTIONS,
-      constructionTypeOptions: CONSTRUCTION_TYPE_OPTIONS
+      constructionTypeOptions: CONSTRUCTION_TYPE_OPTIONS,
+      isMobile: false
     }
   },
   computed: {
@@ -149,8 +195,16 @@ export default {
   created() {
     this.loadRooms()
     this.loadManagers()
+    this.checkMobile()
+    window.addEventListener('resize', this.checkMobile)
+  },
+  beforeDestroy() {
+    window.removeEventListener('resize', this.checkMobile)
   },
   methods: {
+    checkMobile() {
+      this.isMobile = window.innerWidth < 768
+    },
     async loadRooms() {
       this.loading = true
       try {
@@ -253,5 +307,77 @@ export default {
 
 .danger {
   color: #f56c6c;
+}
+
+/* 移动端机房列表 */
+.mobile-room-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-room-card {
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 15px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.mobile-room-card:hover {
+  background: #f0f0f0;
+}
+
+.mobile-room-card .room-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.mobile-room-card .room-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mobile-room-card .room-name {
+  font-weight: 600;
+  font-size: 16px;
+  color: #303133;
+}
+
+.mobile-room-card .room-code {
+  font-size: 12px;
+  color: #909399;
+}
+
+.mobile-room-card .room-info {
+  margin-bottom: 12px;
+}
+
+.mobile-room-card .info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 6px;
+}
+
+.mobile-room-card .info-row .label {
+  color: #909399;
+  min-width: 20px;
+}
+
+.mobile-room-card .room-progress {
+  margin-bottom: 10px;
+}
+
+.mobile-room-card .room-actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #ebeef5;
 }
 </style>
