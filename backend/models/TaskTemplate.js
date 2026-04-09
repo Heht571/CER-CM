@@ -48,7 +48,7 @@ TaskTemplate.init({
   // purchase-购置, lease-租赁, self_build-自建, container-一体化集装箱
   applicable_types: {
     type: DataTypes.JSON,
-    defaultValue: ['purchase', 'lease', 'self_build', 'container'],
+    defaultValue: ['purchase', 'lease', 'self_build', 'container', 'reuse'],
     comment: '适用的建设方式'
   }
 }, {

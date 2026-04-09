@@ -232,7 +232,10 @@ export default {
 
         this.loading = true
         try {
-          await createRoom(this.form)
+          await createRoom({
+            ...this.form,
+            code: this.form.code ? this.form.code.trim() : null
+          })
           this.$message.success('创建成功，已自动生成建设任务')
           this.$router.push('/rooms')
         } catch (error) {

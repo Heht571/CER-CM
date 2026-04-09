@@ -15,6 +15,11 @@ export function getTaskDetail(id) {
   return request.get(`/tasks/${id}`)
 }
 
+// 同时更新任务状态与进度
+export function updateTask(id, data) {
+  return request.put(`/tasks/${id}`, data)
+}
+
 // 更新任务状态
 export function updateTaskStatus(id, data) {
   return request.put(`/tasks/${id}/status`, data)

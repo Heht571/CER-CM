@@ -47,7 +47,7 @@
                   </span>
                 </div>
                 <div class="task-actions">
-                  <el-button type="primary" size="mini" @click.stop="showUpdateDialog(task)">
+                  <el-button type="primary" size="mini" :disabled="isTaskEditingLocked(task)" @click.stop="showUpdateDialog(task)">
                     更新进度
                   </el-button>
                 </div>
@@ -111,7 +111,7 @@
 </template>
 
 <script>
-import { getMyRoomTasks, updateTaskStatus, updateTaskProgress } from '@/api/task'
+import { getMyRoomTasks, updateTask } from '@/api/task'
 import { TASK_STATUS_OPTIONS } from '@/utils/constants'
 import {
   getTaskStatusText,
@@ -154,6 +154,15 @@ export default {
       }
     },
     showUpdateDialog(task) {
+      if (this.isTaskEditingLocked(task)) {
+        this.$message.warning(
+          task.room?.status === 'paused'
+            ? '机房已暂停，请先恢复机房状态后再更新任务'
+            : '机房已完成，请先调整机房状态后再更新任务'
+        )
+        return
+      }
+
       this.currentTask = task
       this.taskForm = {
         status: task.status,
@@ -163,25 +172,47 @@ export default {
       this.dialogVisible = true
     },
     async handleUpdate() {
+      if (this.isTaskEditingLocked(this.currentTask)) {
+        this.$message.warning(
+          this.currentTask?.room?.status === 'paused'
+            ? '机房已暂停，请先恢复机房状态后再更新任务'
+            : '机房已完成，请先调整机房状态后再更新任务'
+        )
+        return
+      }
+
+      if (this.taskForm.status === 'completed' && this.taskForm.progress !== 100) {
+        this.$message.warning('任务完成时进度必须为100%')
+        return
+      }
+      if (this.taskForm.status === 'not_started' && this.taskForm.progress > 0) {
+        this.$message.warning('任务未开始时进度应为0%')
+        return
+      }
+      if (
+        this.taskForm.status === this.currentTask.status &&
+        this.taskForm.progress === this.currentTask.progress &&
+        !this.taskForm.remark
+      ) {
+        this.$message.info('没有任何变更')
+        return
+      }
+
       try {
-        if (this.taskForm.status !== this.currentTask.status) {
-          await updateTaskStatus(this.currentTask.id, {
-            status: this.taskForm.status,
-            remark: this.taskForm.remark
-          })
-        }
-        if (this.taskForm.progress !== this.currentTask.progress) {
-          await updateTaskProgress(this.currentTask.id, {
-            progress: this.taskForm.progress,
-            remark: this.taskForm.remark
-          })
-        }
+        await updateTask(this.currentTask.id, {
+          status: this.taskForm.status,
+          progress: this.taskForm.progress,
+          remark: this.taskForm.remark
+        })
         this.$message.success('更新成功')
         this.dialogVisible = false
         this.loadRoomTasks()
       } catch (error) {
         console.error(error)
       }
+    },
+    isTaskEditingLocked(task) {
+      return ['paused', 'completed'].includes(task?.room?.status)
     },
     goToRoom(roomId) {
       this.$router.push(`/rooms/${roomId}`)

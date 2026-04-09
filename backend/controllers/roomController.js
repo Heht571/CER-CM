@@ -1,4 +1,4 @@
-const { MachineRoom, User, RoomTask, TaskTemplate, TaskDependency, ConstructionPhase, sequelize } = require('../models');
+const { MachineRoom, User, RoomTask, TaskProgressLog, TaskTemplate, TaskDependency, ConstructionPhase, sequelize } = require('../models');
 const { success, fail } = require('../utils/response');
 const { Op } = require('sequelize');
 
@@ -93,6 +93,33 @@ function calculateTaskDates(nodes, dependencies, startDate, constructionType) {
   return results;
 }
 
+const normalizeOptionalCode = (value) => {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    return value || null;
+  }
+
+  const normalized = value.trim();
+  return normalized || null;
+};
+
+const calculateTaskSummary = (tasks = []) => {
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter(task => task.status === 'completed').length;
+  const inProgressTasks = tasks.filter(task => task.status === 'in_progress').length;
+  const totalProgress = tasks.reduce((sum, task) => sum + Number(task.progress || 0), 0);
+
+  return {
+    totalTasks,
+    completedTasks,
+    inProgressTasks,
+    overallProgress: totalTasks > 0 ? Math.round(totalProgress / totalTasks) : 0
+  };
+};
+
 /**
  * 获取机房列表
  */
@@ -129,15 +156,17 @@ const getList = async (req, res, next) => {
     });
 
     const roomsWithProgress = await Promise.all(rows.map(async (room) => {
-      const totalTasks = await RoomTask.count({ where: { room_id: room.id } });
-      const completedTasks = await RoomTask.count({
-        where: { room_id: room.id, status: 'completed' }
+      const roomTasks = await RoomTask.findAll({
+        where: { room_id: room.id },
+        attributes: ['status', 'progress']
       });
+      const taskSummary = calculateTaskSummary(roomTasks);
+
       return {
         ...room.toJSON(),
-        progress: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
-        totalTasks,
-        completedTasks
+        progress: taskSummary.overallProgress,
+        totalTasks: taskSummary.totalTasks,
+        completedTasks: taskSummary.completedTasks
       };
     }));
 
@@ -187,6 +216,7 @@ const getDetail = async (req, res, next) => {
 const create = async (req, res, next) => {
   try {
     const { name, code, location, description, manager_id, planned_start_date, construction_type = 'purchase' } = req.body;
+    const normalizedCode = normalizeOptionalCode(code);
 
     if (!name) {
       return fail(res, '机房名称不能为空');
@@ -196,8 +226,8 @@ const create = async (req, res, next) => {
       return fail(res, '请选择项目开始日期');
     }
 
-    if (code) {
-      const existRoom = await MachineRoom.findOne({ where: { code } });
+    if (normalizedCode) {
+      const existRoom = await MachineRoom.findOne({ where: { code: normalizedCode } });
       if (existRoom) {
         return fail(res, '机房编码已存在');
       }
@@ -206,10 +236,18 @@ const create = async (req, res, next) => {
     const transaction = await sequelize.transaction();
 
     try {
+      if (manager_id) {
+        const manager = await User.findByPk(manager_id, { transaction });
+        if (!manager || manager.role !== 'manager' || Number(manager.status) !== 1) {
+          await transaction.rollback();
+          return fail(res, '负责人不存在、未启用或角色不正确');
+        }
+      }
+
       // 创建机房
       const room = await MachineRoom.create({
         name,
-        code,
+        code: normalizedCode,
         location,
         description,
         manager_id,
@@ -275,70 +313,149 @@ const create = async (req, res, next) => {
 const update = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, code, location, description, planned_start_date, construction_type } = req.body;
+    const { name, code, location, description, planned_start_date, construction_type, manager_id } = req.body;
+    const normalizedCode = normalizeOptionalCode(code);
+    const transaction = await sequelize.transaction();
 
-    const room = await MachineRoom.findByPk(id);
-    if (!room) {
-      return fail(res, '机房不存在', 404);
-    }
-
-    if (code && code !== room.code) {
-      const existRoom = await MachineRoom.findOne({ where: { code } });
-      if (existRoom) {
-        return fail(res, '机房编码已存在');
+    try {
+      const room = await MachineRoom.findByPk(id, { transaction });
+      if (!room) {
+        await transaction.rollback();
+        return fail(res, '机房不存在', 404);
       }
-    }
 
-    await room.update({
-      name,
-      code,
-      location,
-      description,
-      planned_start_date,
-      construction_type
-    });
-
-    // 如果更新了开始日期或建设方式，重新计算所有任务日期
-    if (planned_start_date || construction_type) {
-      const nodes = await TaskTemplate.findAll();
-      const dependencies = await TaskDependency.findAll();
-
-      const effectiveType = construction_type || room.construction_type;
-      const effectiveDate = planned_start_date || room.planned_start_date;
-
-      const tasksWithDates = calculateTaskDates(nodes, dependencies, effectiveDate, effectiveType);
-
-      // 删除旧任务，创建新任务
-      await RoomTask.destroy({ where: { room_id: id } });
-
-      const tasksToCreate = tasksWithDates.map(task => ({
-        room_id: room.id,
-        template_id: task.id,
-        phase_id: task.phase_id,
-        name: task.name,
-        planned_days: task.planned_days,
-        planned_start_date: task.planned_start_date,
-        planned_end_date: task.planned_end_date,
-        status: 'not_started',
-        progress: 0
-      }));
-
-      await RoomTask.bulkCreate(tasksToCreate);
-
-      // 更新项目结束日期
-      const lastTask = tasksWithDates.reduce((latest, task) => {
-        if (!latest || new Date(task.planned_end_date) > new Date(latest.planned_end_date)) {
-          return task;
+      const hasCode = Object.prototype.hasOwnProperty.call(req.body, 'code');
+      if (hasCode && normalizedCode && normalizedCode !== room.code) {
+        const existRoom = await MachineRoom.findOne({ where: { code: normalizedCode }, transaction });
+        if (existRoom) {
+          await transaction.rollback();
+          return fail(res, '机房编码已存在');
         }
-        return latest;
-      }, null);
-
-      if (lastTask) {
-        await room.update({ planned_end_date: lastTask.planned_end_date });
       }
-    }
 
-    success(res, null, '更新成功');
+      const hasManagerId = Object.prototype.hasOwnProperty.call(req.body, 'manager_id');
+      if (hasManagerId && manager_id) {
+        const manager = await User.findByPk(manager_id, { transaction });
+        if (!manager || manager.role !== 'manager' || Number(manager.status) !== 1) {
+          await transaction.rollback();
+          return fail(res, '负责人不存在、未启用或角色不正确');
+        }
+      }
+
+      const hasPlannedStartDate = Object.prototype.hasOwnProperty.call(req.body, 'planned_start_date');
+      const hasConstructionType = Object.prototype.hasOwnProperty.call(req.body, 'construction_type');
+      const shouldRecalculateTasks = (
+        (hasPlannedStartDate && planned_start_date !== room.planned_start_date) ||
+        (hasConstructionType && construction_type !== room.construction_type)
+      );
+      const effectiveType = hasConstructionType ? construction_type : room.construction_type;
+      const effectiveDate = hasPlannedStartDate ? planned_start_date : room.planned_start_date;
+
+      if (shouldRecalculateTasks) {
+        const startedTaskCount = await RoomTask.count({
+          where: {
+            room_id: id,
+            status: { [Op.ne]: 'not_started' }
+          },
+          transaction
+        });
+
+        if (startedTaskCount > 0) {
+          await transaction.rollback();
+          return fail(res, '已有已开始或已完成的任务，暂不支持直接重算计划');
+        }
+      }
+
+      const roomUpdateData = {
+        name,
+        location,
+        description,
+        planned_start_date,
+        construction_type
+      };
+
+      if (hasCode) {
+        roomUpdateData.code = normalizedCode;
+      }
+
+      if (hasManagerId) {
+        roomUpdateData.manager_id = manager_id || null;
+      }
+
+      await room.update(roomUpdateData, { transaction });
+
+      if (shouldRecalculateTasks) {
+        const nodes = await TaskTemplate.findAll({
+          order: [['graph_level', 'ASC'], ['graph_row', 'ASC']],
+          transaction
+        });
+        const dependencies = await TaskDependency.findAll({ transaction });
+        const tasksWithDates = calculateTaskDates(nodes, dependencies, effectiveDate, effectiveType);
+        const existingTasks = await RoomTask.findAll({
+          where: { room_id: id },
+          transaction
+        });
+        const existingTaskMap = new Map(existingTasks.map(task => [task.template_id, task]));
+        const nextTemplateIds = new Set();
+
+        for (const task of tasksWithDates) {
+          nextTemplateIds.add(task.id);
+
+          const taskData = {
+            phase_id: task.phase_id,
+            name: task.name,
+            planned_days: task.planned_days,
+            planned_start_date: task.planned_start_date,
+            planned_end_date: task.planned_end_date
+          };
+
+          const existingTask = existingTaskMap.get(task.id);
+          if (existingTask) {
+            await existingTask.update(taskData, { transaction });
+          } else {
+            await RoomTask.create({
+              room_id: room.id,
+              template_id: task.id,
+              ...taskData,
+              status: 'not_started',
+              progress: 0
+            }, { transaction });
+          }
+        }
+
+        const removableTaskIds = existingTasks
+          .filter(task => !nextTemplateIds.has(task.template_id))
+          .map(task => task.id);
+
+        if (removableTaskIds.length > 0) {
+          await TaskProgressLog.destroy({
+            where: { task_id: { [Op.in]: removableTaskIds } },
+            transaction
+          });
+          await RoomTask.destroy({
+            where: { id: { [Op.in]: removableTaskIds } },
+            transaction
+          });
+        }
+
+        const lastTask = tasksWithDates.reduce((latest, task) => {
+          if (!latest || new Date(task.planned_end_date) > new Date(latest.planned_end_date)) {
+            return task;
+          }
+          return latest;
+        }, null);
+
+        await room.update({
+          planned_end_date: lastTask ? lastTask.planned_end_date : null
+        }, { transaction });
+      }
+
+      await transaction.commit();
+      success(res, null, '更新成功');
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   } catch (error) {
     next(error);
   }
@@ -359,6 +476,20 @@ const remove = async (req, res, next) => {
     const transaction = await sequelize.transaction();
 
     try {
+      const tasks = await RoomTask.findAll({
+        where: { room_id: id },
+        attributes: ['id'],
+        transaction
+      });
+      const taskIds = tasks.map(task => task.id);
+
+      if (taskIds.length > 0) {
+        await TaskProgressLog.destroy({
+          where: { task_id: { [Op.in]: taskIds } },
+          transaction
+        });
+      }
+
       await RoomTask.destroy({ where: { room_id: id }, transaction });
       await room.destroy({ transaction });
       await transaction.commit();
@@ -387,8 +518,8 @@ const assignManager = async (req, res, next) => {
 
     if (manager_id) {
       const manager = await User.findByPk(manager_id);
-      if (!manager || manager.role !== 'manager') {
-        return fail(res, '负责人不存在或角色不正确');
+      if (!manager || manager.role !== 'manager' || Number(manager.status) !== 1) {
+        return fail(res, '负责人不存在、未启用或角色不正确');
       }
     }
 
@@ -399,6 +530,88 @@ const assignManager = async (req, res, next) => {
   }
 };
 
+const getRoomTaskStats = async (roomId, transaction) => {
+  const tasks = await RoomTask.findAll({
+    where: { room_id: roomId },
+    attributes: ['status', 'actual_start_date', 'actual_end_date'],
+    transaction
+  });
+
+  const startedTasks = tasks.filter(task => task.status !== 'not_started');
+  const completedTasks = tasks.filter(task => task.status === 'completed');
+  const earliestStartDate = startedTasks
+    .map(task => task.actual_start_date)
+    .filter(Boolean)
+    .sort((a, b) => new Date(a) - new Date(b))[0] || null;
+  const latestEndDate = completedTasks
+    .map(task => task.actual_end_date)
+    .filter(Boolean)
+    .sort((a, b) => new Date(b) - new Date(a))[0] || null;
+
+  return {
+    totalCount: tasks.length,
+    startedCount: startedTasks.length,
+    completedCount: completedTasks.length,
+    earliestStartDate,
+    latestEndDate
+  };
+};
+
+const buildRoomStatusUpdateData = (room, status, taskStats) => {
+  if (!['planning', 'in_progress', 'completed', 'paused'].includes(status)) {
+    return { error: '机房状态无效' };
+  }
+
+  if (status === 'completed') {
+    if (taskStats.totalCount === 0) {
+      return { error: '当前机房暂无任务，无法标记为已完成' };
+    }
+    if (taskStats.completedCount !== taskStats.totalCount) {
+      return { error: '所有任务完成后才能将机房标记为已完成' };
+    }
+
+    return {
+      updateData: {
+        status,
+        actual_start_date: taskStats.earliestStartDate || room.actual_start_date || new Date(),
+        actual_end_date: taskStats.latestEndDate || new Date()
+      }
+    };
+  }
+
+  if (status === 'planning') {
+    if (taskStats.startedCount > 0) {
+      return { error: '已有进行中或已完成的任务，不能将机房设为规划中' };
+    }
+
+    return {
+      updateData: {
+        status,
+        actual_start_date: null,
+        actual_end_date: null
+      }
+    };
+  }
+
+  if (status === 'in_progress') {
+    return {
+      updateData: {
+        status,
+        actual_start_date: taskStats.earliestStartDate || room.actual_start_date || new Date(),
+        actual_end_date: null
+      }
+    };
+  }
+
+  return {
+    updateData: {
+      status,
+      actual_start_date: taskStats.earliestStartDate || room.actual_start_date || null,
+      actual_end_date: null
+    }
+  };
+};
+
 /**
  * 更新机房状态
  */
@@ -406,23 +619,29 @@ const updateStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    const transaction = await sequelize.transaction();
 
-    const room = await MachineRoom.findByPk(id);
-    if (!room) {
-      return fail(res, '机房不存在', 404);
+    try {
+      const room = await MachineRoom.findByPk(id, { transaction });
+      if (!room) {
+        await transaction.rollback();
+        return fail(res, '机房不存在', 404);
+      }
+
+      const taskStats = await getRoomTaskStats(id, transaction);
+      const { updateData, error: validationError } = buildRoomStatusUpdateData(room, status, taskStats);
+      if (validationError) {
+        await transaction.rollback();
+        return fail(res, validationError);
+      }
+
+      await room.update(updateData, { transaction });
+      await transaction.commit();
+      success(res, null, '状态更新成功');
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
     }
-
-    await room.update({ status });
-
-    if (status === 'in_progress' && !room.actual_start_date) {
-      await room.update({ actual_start_date: new Date() });
-    }
-
-    if (status === 'completed') {
-      await room.update({ actual_end_date: new Date() });
-    }
-
-    success(res, null, '状态更新成功');
   } catch (error) {
     next(error);
   }
@@ -513,17 +732,17 @@ const getProgress = async (req, res, next) => {
       return fail(res, '无权访问该机房', 403);
     }
 
-    const tasks = await RoomTask.findAll({ where: { room_id: id } });
-
-    const totalTasks = tasks.length;
-    const completedTasks = tasks.filter(t => t.status === 'completed').length;
-    const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
+    const tasks = await RoomTask.findAll({
+      where: { room_id: id },
+      attributes: ['status', 'progress']
+    });
+    const taskSummary = calculateTaskSummary(tasks);
 
     success(res, {
-      overall: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
-      totalTasks,
-      completedTasks,
-      inProgressTasks
+      overall: taskSummary.overallProgress,
+      totalTasks: taskSummary.totalTasks,
+      completedTasks: taskSummary.completedTasks,
+      inProgressTasks: taskSummary.inProgressTasks
     });
   } catch (error) {
     next(error);

@@ -2,23 +2,47 @@ import Vue from 'vue'
 import App from './App.vue'
 import router from './router'
 import store from './store'
-import ElementUI from 'element-ui'
+import ElementUI, { Message } from 'element-ui'
 import 'element-ui/lib/theme-chalk/index.css'
 
 Vue.config.productionTip = false
 Vue.use(ElementUI)
 
-// 路由守卫
-router.beforeEach((to, from, next) => {
-  const token = store.state.auth.token
+router.beforeEach(async (to, from, next) => {
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
+  const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin)
+  let { token, user } = store.state.auth
 
-  if (to.meta.requiresAuth && !token) {
+  if (requiresAuth && !token) {
     next('/login')
-  } else if (to.path === '/login' && token) {
-    next('/')
-  } else {
-    next()
+    return
   }
+
+  if (token && (requiresAuth || to.path === '/login')) {
+    try {
+      const profile = await store.dispatch('auth/refreshProfile')
+      user = profile || user
+      token = store.state.auth.token
+    } catch (error) {
+      if (!store.state.auth.token) {
+        next('/login')
+        return
+      }
+    }
+  }
+
+  if (to.path === '/login' && token) {
+    next(user.role === 'admin' ? '/dashboard' : '/tasks')
+    return
+  }
+
+  if (requiresAdmin && user.role !== 'admin') {
+    Message.error('需要管理员权限')
+    next('/tasks')
+    return
+  }
+
+  next()
 })
 
 new Vue({

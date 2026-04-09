@@ -10,7 +10,7 @@ const getList = async (req, res, next) => {
       include: [{
         model: TaskTemplate,
         as: 'templates',
-        attributes: ['id', 'name', 'responsible_department', 'planned_days', 'sort_order'],
+        attributes: ['id', 'name', 'planned_days', 'sort_order'],
         order: [['sort_order', 'ASC']]
       }],
       order: [['phase_number', 'ASC']]

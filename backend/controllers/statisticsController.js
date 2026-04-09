@@ -2,6 +2,55 @@ const { MachineRoom, RoomTask, ConstructionPhase, User, sequelize } = require('.
 const { success, fail } = require('../utils/response');
 const { Op } = require('sequelize');
 
+const DATE_ONLY_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const parseDateOnly = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  if (typeof value === 'string') {
+    const matched = value.match(DATE_ONLY_REGEX);
+    if (matched) {
+      const [, year, month, day] = matched;
+      return new Date(Number(year), Number(month) - 1, Number(day));
+    }
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+};
+
+const formatDateOnly = (value = new Date()) => {
+  const date = parseDateOnly(value);
+  if (!date) {
+    return null;
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const diffCalendarDays = (start, end) => {
+  const startDate = parseDateOnly(start);
+  const endDate = parseDateOnly(end);
+  if (!startDate || !endDate) {
+    return 0;
+  }
+  return Math.round((endDate - startDate) / MS_PER_DAY);
+};
+
 /**
  * 总体概览统计
  */
@@ -46,8 +95,14 @@ const getOverview = async (req, res, next) => {
       }
     });
 
+    const overallProgressResult = await sequelize.query(
+      `SELECT COALESCE(ROUND(AVG(progress)), 0) as progress FROM room_tasks`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+    const overallProgress = parseInt(overallProgressResult[0]?.progress) || 0;
+
     // 延期任务统计
-    const today = new Date();
+    const today = formatDateOnly(new Date());
     const delayedResult = await sequelize.query(
       `SELECT COUNT(*) as count FROM room_tasks
        WHERE status != 'completed' AND planned_end_date < $1 AND planned_end_date IS NOT NULL`,
@@ -84,7 +139,7 @@ const getOverview = async (req, res, next) => {
         delayed: delayedTasks
       },
       managers: totalManagers,
-      overallProgress: taskCounts.total > 0 ? Math.round((taskCounts.completed / taskCounts.total) * 100) : 0,
+      overallProgress,
       constructionTypes: constructionCounts
     });
   } catch (error) {
@@ -108,7 +163,8 @@ const getByPhase = async (req, res, next) => {
       `SELECT phase_id,
               COUNT(*) as total,
               SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-              SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as "inProgress"
+              SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as "inProgress",
+              COALESCE(ROUND(AVG(progress)), 0) as progress
        FROM room_tasks
        GROUP BY phase_id`,
       { type: sequelize.QueryTypes.SELECT }
@@ -120,12 +176,13 @@ const getByPhase = async (req, res, next) => {
       statsMap[stat.phase_id] = {
         total: parseInt(stat.total) || 0,
         completed: parseInt(stat.completed) || 0,
-        inProgress: parseInt(stat.inProgress) || 0
+        inProgress: parseInt(stat.inProgress) || 0,
+        progress: parseInt(stat.progress) || 0
       };
     });
 
     const result = allPhases.map(phase => {
-      const stats = statsMap[phase.id] || { total: 0, completed: 0, inProgress: 0 };
+      const stats = statsMap[phase.id] || { total: 0, completed: 0, inProgress: 0, progress: 0 };
       return {
         id: phase.id,
         name: phase.name,
@@ -133,7 +190,7 @@ const getByPhase = async (req, res, next) => {
         total: stats.total,
         completed: stats.completed,
         inProgress: stats.inProgress,
-        percentage: stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0
+        percentage: stats.progress
       };
     });
 
@@ -148,7 +205,7 @@ const getByPhase = async (req, res, next) => {
  */
 const getDelayed = async (req, res, next) => {
   try {
-    const today = new Date();
+    const today = formatDateOnly(new Date());
 
     const delayedTasks = await RoomTask.findAll({
       where: {
@@ -177,7 +234,7 @@ const getDelayed = async (req, res, next) => {
 
     const result = delayedTasks.map(task => ({
       ...task.toJSON(),
-      delayDays: Math.ceil((today - new Date(task.planned_end_date)) / (1000 * 60 * 60 * 24))
+      delayDays: Math.max(0, diffCalendarDays(task.planned_end_date, today))
     }));
 
     success(res, result);
@@ -194,7 +251,8 @@ const getRoomRanking = async (req, res, next) => {
     // 使用原生SQL获取所有机房的任务统计
     const taskStats = await sequelize.query(
       `SELECT room_id, COUNT(*) as total,
-              SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+              SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+              COALESCE(ROUND(AVG(progress)), 0) as progress
        FROM room_tasks
        GROUP BY room_id`,
       { type: sequelize.QueryTypes.SELECT }
@@ -205,7 +263,8 @@ const getRoomRanking = async (req, res, next) => {
     taskStats.forEach(stat => {
       statsMap[stat.room_id] = {
         total: parseInt(stat.total) || 0,
-        completed: parseInt(stat.completed) || 0
+        completed: parseInt(stat.completed) || 0,
+        progress: parseInt(stat.progress) || 0
       };
     });
 
@@ -222,7 +281,7 @@ const getRoomRanking = async (req, res, next) => {
     });
 
     const result = rooms.map(room => {
-      const stats = statsMap[room.id] || { total: 0, completed: 0 };
+      const stats = statsMap[room.id] || { total: 0, completed: 0, progress: 0 };
       return {
         id: room.id,
         name: room.name,
@@ -230,7 +289,7 @@ const getRoomRanking = async (req, res, next) => {
         manager: room.manager,
         total: stats.total,
         completed: stats.completed,
-        progress: stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0
+        progress: stats.progress
       };
     });
 

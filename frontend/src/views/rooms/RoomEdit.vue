@@ -2,6 +2,7 @@
   <div class="room-edit">
     <el-card header="编辑机房">
       <el-alert
+        v-if="hasScheduleChange"
         title="修改建设方式或开始日期后，将重新生成所有任务节点"
         type="warning"
         :closable="false"
@@ -80,6 +81,10 @@ export default {
         construction_type: 'purchase',
         description: ''
       },
+      originalSchedule: {
+        planned_start_date: null,
+        construction_type: 'purchase'
+      },
       rules: {
         name: [
           { required: true, message: '请输入机房名称', trigger: 'blur' },
@@ -96,6 +101,12 @@ export default {
   computed: {
     constructionTypeDesc() {
       return getConstructionTypeDesc(this.form.construction_type)
+    },
+    hasScheduleChange() {
+      return (
+        this.form.planned_start_date !== this.originalSchedule.planned_start_date ||
+        this.form.construction_type !== this.originalSchedule.construction_type
+      )
     }
   },
   created() {
@@ -118,12 +129,16 @@ export default {
         const room = res.data
         this.form = {
           name: room.name,
-          code: room.code,
+          code: room.code || '',
           location: room.location,
           manager_id: room.manager_id,
           planned_start_date: room.planned_start_date,
           construction_type: room.construction_type,
           description: room.description
+        }
+        this.originalSchedule = {
+          planned_start_date: room.planned_start_date,
+          construction_type: room.construction_type
         }
       } catch (error) {
         console.error(error)
@@ -138,19 +153,24 @@ export default {
       this.$refs.form.validate(async valid => {
         if (!valid) return
 
-        try {
-          await this.$confirm(
-            '修改建设方式或开始日期后，将重新生成所有任务节点，确定继续吗？',
-            '确认修改',
-            { type: 'warning' }
-          )
-        } catch {
-          return
+        if (this.hasScheduleChange) {
+          try {
+            await this.$confirm(
+              '修改建设方式或开始日期后，将重新生成所有任务节点，确定继续吗？',
+              '确认修改',
+              { type: 'warning' }
+            )
+          } catch {
+            return
+          }
         }
 
         this.loading = true
         try {
-          await updateRoom(this.roomId, this.form)
+          await updateRoom(this.roomId, {
+            ...this.form,
+            code: this.form.code ? this.form.code.trim() : null
+          })
           this.$message.success('修改成功')
           this.$router.push('/rooms')
         } catch (error) {

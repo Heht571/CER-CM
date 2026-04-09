@@ -137,7 +137,7 @@
         </el-table-column>
         <el-table-column label="操作" width="100">
           <template slot-scope="scope">
-            <el-button type="text" @click="showTaskDialog(scope.row)">更新</el-button>
+            <el-button type="text" :disabled="isTaskEditingLocked" @click="showTaskDialog(scope.row)">更新</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -247,7 +247,7 @@
 
 <script>
 import { getRoomDetail, getRoomTasks, getRoomProgress, assignManager, updateRoomStatus, getRoomLogs } from '@/api/room'
-import { updateTaskStatus, updateTaskProgress } from '@/api/task'
+import { updateTask } from '@/api/task'
 import { getManagers } from '@/api/user'
 import { mapGetters } from 'vuex'
 import NetworkGraph from '@/components/NetworkGraph.vue'
@@ -258,7 +258,10 @@ import {
   getRoomStatusType,
   getConstructionTypeText,
   formatDate,
-  formatDateTime
+  formatDateTime,
+  parseDateOnly,
+  getTodayDateOnly,
+  diffCalendarDays
 } from '@/utils'
 
 export default {
@@ -296,12 +299,17 @@ export default {
     }
   },
   computed: {
-    ...mapGetters('auth', ['isAdmin'])
+    ...mapGetters('auth', ['isAdmin']),
+    isTaskEditingLocked() {
+      return ['paused', 'completed'].includes(this.room.status)
+    }
   },
   created() {
     this.roomId = this.$route.params.id
     this.loadData()
-    this.loadManagers()
+    if (this.isAdmin) {
+      this.loadManagers()
+    }
     this.loadLogs()
   },
   methods: {
@@ -324,6 +332,7 @@ export default {
       }
     },
     async loadManagers() {
+      if (!this.isAdmin) return
       try {
         const res = await getManagers()
         this.managers = res.data
@@ -406,6 +415,15 @@ export default {
       }
     },
     showTaskDialog(task) {
+      if (this.isTaskEditingLocked) {
+        this.$message.warning(
+          this.room.status === 'paused'
+            ? '机房已暂停，请先恢复机房状态后再更新任务'
+            : '机房已完成，请先调整机房状态后再更新任务'
+        )
+        return
+      }
+
       this.currentTask = task
       this.taskForm = {
         status: task.status,
@@ -415,6 +433,15 @@ export default {
       this.taskDialogVisible = true
     },
     async handleTaskUpdate() {
+      if (this.isTaskEditingLocked) {
+        this.$message.warning(
+          this.room.status === 'paused'
+            ? '机房已暂停，请先恢复机房状态后再更新任务'
+            : '机房已完成，请先调整机房状态后再更新任务'
+        )
+        return
+      }
+
       // 数据校验：进度必须与状态匹配
       if (this.taskForm.status === 'completed' && this.taskForm.progress !== 100) {
         this.$message.warning('任务完成时进度必须为100%')
@@ -434,18 +461,11 @@ export default {
         return
       }
       try {
-        if (this.taskForm.status !== this.currentTask.status) {
-          await updateTaskStatus(this.currentTask.id, {
-            status: this.taskForm.status,
-            remark: this.taskForm.remark
-          })
-        }
-        if (this.taskForm.progress !== this.currentTask.progress) {
-          await updateTaskProgress(this.currentTask.id, {
-            progress: this.taskForm.progress,
-            remark: this.taskForm.remark
-          })
-        }
+        await updateTask(this.currentTask.id, {
+          status: this.taskForm.status,
+          progress: this.taskForm.progress,
+          remark: this.taskForm.remark
+        })
         this.$message.success('更新成功')
         this.taskDialogVisible = false
         this.loadData()
@@ -475,45 +495,36 @@ export default {
     // 时间统计方法
     calculateTotalDays() {
       if (!this.room.planned_start_date || !this.room.planned_end_date) return '-'
-      const start = new Date(this.room.planned_start_date)
-      const end = new Date(this.room.planned_end_date)
-      return Math.ceil((end - start) / (1000 * 60 * 60 * 24))
+      return Math.max(0, diffCalendarDays(this.room.planned_start_date, this.room.planned_end_date))
     },
     calculateElapsedDays() {
       if (!this.room.planned_start_date) return '-'
-      const start = new Date(this.room.planned_start_date)
-      const today = new Date()
-      const elapsed = Math.ceil((today - start) / (1000 * 60 * 60 * 24))
-      return Math.max(0, elapsed)
+      return Math.max(0, diffCalendarDays(this.room.planned_start_date, getTodayDateOnly()))
     },
     calculateRemainingDays() {
       if (!this.room.planned_end_date) return '-'
-      const end = new Date(this.room.planned_end_date)
-      const today = new Date()
-      const remaining = Math.ceil((end - today) / (1000 * 60 * 60 * 24))
-      return Math.max(0, remaining)
+      return Math.max(0, diffCalendarDays(getTodayDateOnly(), this.room.planned_end_date))
     },
     isOverdue() {
       if (!this.room.planned_end_date) return false
-      const end = new Date(this.room.planned_end_date)
-      const today = new Date()
-      return today > end && this.room.status !== 'completed'
+      const end = parseDateOnly(this.room.planned_end_date)
+      const today = getTodayDateOnly()
+      return Boolean(end && today && today > end && this.room.status !== 'completed')
     },
     calculateOverdueDays() {
       if (!this.room.planned_end_date) return 0
-      const end = new Date(this.room.planned_end_date)
-      const today = new Date()
-      return Math.max(0, Math.ceil((today - end) / (1000 * 60 * 60 * 24)))
+      return Math.max(0, diffCalendarDays(this.room.planned_end_date, getTodayDateOnly()))
     },
     calculatePlannedProgress() {
       if (!this.room.planned_start_date || !this.room.planned_end_date) return 0
-      const start = new Date(this.room.planned_start_date)
-      const end = new Date(this.room.planned_end_date)
-      const today = new Date()
-      const total = end - start
-      const elapsed = today - start
+      const start = parseDateOnly(this.room.planned_start_date)
+      const end = parseDateOnly(this.room.planned_end_date)
+      const today = getTodayDateOnly()
+      if (!start || !end || !today) return 0
+      const total = diffCalendarDays(start, end)
+      const elapsed = diffCalendarDays(start, today)
       if (elapsed <= 0) return 0
-      if (elapsed >= total) return 100
+      if (total <= 0 || elapsed >= total) return 100
       return Math.round((elapsed / total) * 100)
     },
     getDeviationClass() {

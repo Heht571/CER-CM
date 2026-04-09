@@ -4,6 +4,40 @@ import {
   CONSTRUCTION_TYPE_MAP
 } from './constants'
 
+const DATE_ONLY_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+export function parseDateOnly(date) {
+  if (!date) return null
+
+  if (date instanceof Date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  }
+
+  if (typeof date === 'string') {
+    const matched = date.match(DATE_ONLY_REGEX)
+    if (matched) {
+      const [, year, month, day] = matched
+      return new Date(Number(year), Number(month) - 1, Number(day))
+    }
+  }
+
+  const parsed = new Date(date)
+  if (Number.isNaN(parsed.getTime())) return null
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())
+}
+
+export function getTodayDateOnly() {
+  return parseDateOnly(new Date())
+}
+
+export function diffCalendarDays(startDate, endDate) {
+  const start = parseDateOnly(startDate)
+  const end = parseDateOnly(endDate)
+  if (!start || !end) return 0
+  return Math.round((end - start) / MS_PER_DAY)
+}
+
 /**
  * 获取任务状态文本
  */
@@ -51,7 +85,10 @@ export function getConstructionTypeDesc(type) {
  */
 export function formatDate(date) {
   if (!date) return '-'
-  const d = new Date(date)
+  const d = typeof date === 'string' && DATE_ONLY_REGEX.test(date)
+    ? parseDateOnly(date)
+    : new Date(date)
+  if (!d || Number.isNaN(d.getTime())) return '-'
   const year = d.getFullYear()
   const month = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
@@ -77,9 +114,7 @@ export function formatDateTime(date) {
  */
 export function calculateDelayDays(plannedEndDate) {
   if (!plannedEndDate) return 0
-  const today = new Date()
-  const planned = new Date(plannedEndDate)
-  return Math.ceil((today - planned) / (1000 * 60 * 60 * 24))
+  return Math.max(0, diffCalendarDays(plannedEndDate, getTodayDateOnly()))
 }
 
 /**

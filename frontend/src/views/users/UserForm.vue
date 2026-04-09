@@ -60,7 +60,10 @@ export default {
       },
       rules: {
         username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-        password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+        password: [
+          { required: true, message: '请输入密码', trigger: 'blur' },
+          { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
+        ],
         real_name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
         role: [{ required: true, message: '请选择角色', trigger: 'change' }]
       }

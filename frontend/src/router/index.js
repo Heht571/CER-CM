@@ -14,14 +14,17 @@ const routes = [
   {
     path: '/',
     component: Layout,
-    redirect: '/dashboard',
+    redirect: () => {
+      const user = JSON.parse(localStorage.getItem('user') || '{}')
+      return user.role === 'admin' ? '/dashboard' : '/tasks'
+    },
     meta: { requiresAuth: true },
     children: [
       {
         path: 'dashboard',
         name: 'Dashboard',
         component: () => import('@/views/dashboard/Dashboard.vue'),
-        meta: { title: '首页', requiresAuth: true }
+        meta: { title: '首页', requiresAuth: true, requiresAdmin: true }
       },
       {
         path: 'rooms',

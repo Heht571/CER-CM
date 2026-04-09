@@ -1,4 +1,4 @@
-import { getTasks, getTaskDetail, updateTaskStatus, updateTaskProgress } from '@/api/task'
+import { getTasks, getTaskDetail, updateTask as updateTaskRequest } from '@/api/task'
 
 // 缓存有效期（毫秒）- 3分钟
 const CACHE_TTL = 3 * 60 * 1000
@@ -67,17 +67,16 @@ const actions = {
     commit('SET_CURRENT_TASK', res.data)
     return { ...res, cached: false }
   },
-  async updateStatus({ commit, dispatch }, { id, data }) {
-    const res = await updateTaskStatus(id, data)
-    // 更新后清除相关缓存
+  async updateTask({ commit }, { id, data }) {
+    const res = await updateTaskRequest(id, data)
     commit('CLEAR_CACHE')
     return res
   },
-  async updateProgress({ commit, dispatch }, { id, data }) {
-    const res = await updateTaskProgress(id, data)
-    // 更新后清除相关缓存
-    commit('CLEAR_CACHE')
-    return res
+  async updateStatus({ dispatch }, payload) {
+    return dispatch('updateTask', payload)
+  },
+  async updateProgress({ dispatch }, payload) {
+    return dispatch('updateTask', payload)
   },
   // 清除缓存
   clearCache({ commit }) {

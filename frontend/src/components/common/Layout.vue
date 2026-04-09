@@ -26,7 +26,7 @@
         text-color="#bfcbd9"
         active-text-color="#409EFF"
       >
-        <el-menu-item index="/dashboard">
+        <el-menu-item v-if="isAdmin" index="/dashboard">
           <i class="el-icon-s-home"></i>
           <span slot="title">首页</span>
         </el-menu-item>
@@ -68,7 +68,7 @@
           active-text-color="#409EFF"
           @select="handleMenuSelect"
         >
-          <el-menu-item index="/dashboard">
+          <el-menu-item v-if="isAdmin" index="/dashboard">
             <i class="el-icon-s-home"></i>
             <span slot="title">首页</span>
           </el-menu-item>

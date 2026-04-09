@@ -55,6 +55,10 @@ const login = async (req, res, next) => {
  */
 const getProfile = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return fail(res, '请先登录', 401);
+    }
+
     success(res, req.user);
   } catch (error) {
     next(error);
@@ -77,6 +81,10 @@ const changePassword = async (req, res, next) => {
     }
 
     const user = await User.findByPk(req.userId);
+    if (!user) {
+      return fail(res, '用户不存在', 404);
+    }
+
     const isMatch = await user.validatePassword(oldPassword);
 
     if (!isMatch) {

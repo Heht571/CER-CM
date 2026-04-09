@@ -1,4 +1,4 @@
-const { User, MachineRoom } = require('../models');
+const { User, MachineRoom, TaskProgressLog, sequelize } = require('../models');
 const { success, fail, paginate } = require('../utils/response');
 const { Op } = require('sequelize');
 
@@ -21,6 +21,7 @@ const getList = async (req, res, next) => {
 
     const { count, rows } = await User.findAndCountAll({
       where,
+      distinct: true,
       attributes: { exclude: ['password'] },
       include: [{
         model: MachineRoom,
@@ -75,6 +76,10 @@ const create = async (req, res, next) => {
       return fail(res, '用户名、密码和姓名不能为空');
     }
 
+    if (password.length < 6) {
+      return fail(res, '密码长度不能少于6位');
+    }
+
     const existUser = await User.findOne({ where: { username } });
     if (existUser) {
       return fail(res, '用户名已存在');
@@ -102,14 +107,44 @@ const create = async (req, res, next) => {
 const update = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { real_name, department, phone, email, status } = req.body;
+    const { real_name, role, department, phone, email, status } = req.body;
 
     const user = await User.findByPk(id);
     if (!user) {
       return fail(res, '用户不存在', 404);
     }
 
-    await user.update({ real_name, department, phone, email, status });
+    if (role !== undefined && !['admin', 'manager'].includes(role)) {
+      return fail(res, '用户角色无效');
+    }
+
+    if (status !== undefined && ![0, 1].includes(Number(status))) {
+      return fail(res, '用户状态无效');
+    }
+
+    const nextRole = role || user.role;
+    const nextStatus = status !== undefined ? Number(status) : user.status;
+
+    if (user.role === 'admin' && user.status === 1 && (nextRole !== 'admin' || nextStatus !== 1)) {
+      const activeAdminCount = await User.count({ where: { role: 'admin', status: 1 } });
+      if (activeAdminCount <= 1) {
+        return fail(res, '至少保留一个启用状态的管理员');
+      }
+    }
+
+    const managedRoomCount = await MachineRoom.count({ where: { manager_id: id } });
+    if (managedRoomCount > 0 && (nextRole !== 'manager' || nextStatus !== 1)) {
+      return fail(res, '该用户仍负责机房，请先完成机房移交');
+    }
+
+    await user.update({
+      real_name,
+      role: nextRole,
+      department,
+      phone,
+      email,
+      status: nextStatus
+    });
     success(res, null, '更新成功');
   } catch (error) {
     next(error);
@@ -138,8 +173,20 @@ const remove = async (req, res, next) => {
       return fail(res, '该用户负责的机房未移交，无法删除');
     }
 
-    await user.destroy();
-    success(res, null, '删除成功');
+    const transaction = await sequelize.transaction();
+
+    try {
+      await TaskProgressLog.destroy({
+        where: { user_id: id },
+        transaction
+      });
+      await user.destroy({ transaction });
+      await transaction.commit();
+      success(res, null, '删除成功');
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   } catch (error) {
     next(error);
   }

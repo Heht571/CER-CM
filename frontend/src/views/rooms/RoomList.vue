@@ -26,7 +26,7 @@
             ></el-option>
           </el-select>
         </el-form-item>
-        <el-form-item label="负责人">
+        <el-form-item v-if="isAdmin" label="负责人">
           <el-select v-model="searchForm.manager_id" placeholder="全部" clearable>
             <el-option
               v-for="manager in managers"
@@ -194,7 +194,9 @@ export default {
   },
   created() {
     this.loadRooms()
-    this.loadManagers()
+    if (this.isAdmin) {
+      this.loadManagers()
+    }
     this.checkMobile()
     window.addEventListener('resize', this.checkMobile)
   },
@@ -222,6 +224,7 @@ export default {
       }
     },
     async loadManagers() {
+      if (!this.isAdmin) return
       try {
         const res = await getManagers()
         this.managers = res.data

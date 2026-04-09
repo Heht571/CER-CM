@@ -64,7 +64,7 @@ export default {
           const res = await login(this.form)
           this.login(res.data)
           this.$message.success('登录成功')
-          this.$router.push('/')
+          this.$router.push(res.data.user.role === 'admin' ? '/dashboard' : '/tasks')
         } catch (error) {
           console.error(error)
         } finally {
