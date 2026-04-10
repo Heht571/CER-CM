@@ -23,8 +23,32 @@
         </el-form-item>
       </el-form>
 
+      <!-- 批量操作 -->
+      <div style="margin-bottom: 15px;">
+        <el-button
+          type="success"
+          size="small"
+          :disabled="selectedUsers.length === 0"
+          @click="handleBatchEnable"
+        >批量启用</el-button>
+        <el-button
+          type="danger"
+          size="small"
+          :disabled="selectedUsers.length === 0"
+          @click="handleBatchDisable"
+        >批量禁用</el-button>
+        <span v-if="selectedUsers.length > 0" style="margin-left: 10px; color: #909399;">
+          已选择 {{ selectedUsers.length }} 个用户
+        </span>
+      </div>
+
       <!-- 用户列表 -->
-      <el-table :data="users" v-loading="loading">
+      <el-table
+        :data="users"
+        v-loading="loading"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="50"></el-table-column>
         <el-table-column prop="username" label="用户名" width="120"></el-table-column>
         <el-table-column prop="real_name" label="姓名" width="120"></el-table-column>
         <el-table-column label="角色" width="100">
@@ -36,6 +60,7 @@
         </el-table-column>
         <el-table-column prop="department" label="部门"></el-table-column>
         <el-table-column prop="phone" label="电话" width="130"></el-table-column>
+        <el-table-column prop="email" label="邮箱" width="180"></el-table-column>
         <el-table-column label="状态" width="80">
           <template slot-scope="scope">
             <el-tag :type="scope.row.status === 1 ? 'success' : 'danger'" size="small">
@@ -77,7 +102,7 @@
 </template>
 
 <script>
-import { getUsers, deleteUser, resetPassword } from '@/api/user'
+import { getUsers, deleteUser, resetPassword, batchUpdateStatus } from '@/api/user'
 
 export default {
   name: 'UserList',
@@ -88,6 +113,7 @@ export default {
       total: 0,
       page: 1,
       pageSize: 10,
+      selectedUsers: [],
       searchForm: {
         keyword: '',
         role: ''
@@ -114,6 +140,9 @@ export default {
         this.loading = false
       }
     },
+    handleSelectionChange(selection) {
+      this.selectedUsers = selection
+    },
     handleSearch() {
       this.page = 1
       this.loadUsers()
@@ -136,6 +165,38 @@ export default {
     },
     goToEdit(id) {
       this.$router.push(`/users/${id}/edit`)
+    },
+    async handleBatchEnable() {
+      try {
+        const ids = this.selectedUsers.map(u => u.id)
+        await this.$confirm(`确定要启用选中的 ${ids.length} 个用户吗？`, '提示', {
+          type: 'info'
+        })
+        await batchUpdateStatus({ ids, status: 1 })
+        this.$message.success('批量启用成功')
+        this.selectedUsers = []
+        this.loadUsers()
+      } catch (error) {
+        if (error !== 'cancel') {
+          console.error(error)
+        }
+      }
+    },
+    async handleBatchDisable() {
+      try {
+        const ids = this.selectedUsers.map(u => u.id)
+        await this.$confirm(`确定要禁用选中的 ${ids.length} 个用户吗？`, '提示', {
+          type: 'warning'
+        })
+        await batchUpdateStatus({ ids, status: 0 })
+        this.$message.success('批量禁用成功')
+        this.selectedUsers = []
+        this.loadUsers()
+      } catch (error) {
+        if (error !== 'cancel') {
+          console.error(error)
+        }
+      }
     },
     async handleResetPassword(user) {
       try {

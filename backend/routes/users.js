@@ -78,6 +78,37 @@ router.get('/managers', userController.getManagers);
 
 /**
  * @swagger
+ * /users/batch-status:
+ *   put:
+ *     summary: 批量更新用户状态
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *               - status
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *               status:
+ *                 type: integer
+ *                 enum: [0, 1]
+ *     responses:
+ *       200:
+ *         description: 更新成功
+ */
+router.put('/batch-status', userController.batchUpdateStatus);
+
+/**
+ * @swagger
  * /users/{id}:
  *   get:
  *     summary: 获取用户详情
@@ -223,5 +254,33 @@ router.delete('/:id', userController.remove);
  *         description: 重置成功
  */
 router.put('/:id/reset-password', userController.resetPassword);
+
+/**
+ * @swagger
+ * /users/{id}/logs:
+ *   get:
+ *     summary: 获取用户操作历史
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: pageSize
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: 成功获取操作历史
+ */
+router.get('/:id/logs', userController.getUserLogs);
 
 module.exports = router;

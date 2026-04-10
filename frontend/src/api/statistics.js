@@ -19,3 +19,8 @@ export function getDelayed() {
 export function getRanking() {
   return request.get('/statistics/ranking')
 }
+
+// 按负责人分组统计
+export function getByManager() {
+  return request.get('/statistics/by-manager')
+}

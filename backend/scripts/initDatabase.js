@@ -1,11 +1,11 @@
 require('dotenv').config();
-const { sequelize, User, ConstructionPhase, TaskTemplate, TaskDependency } = require('../models');
+const { sequelize, User, ConstructionPhase, TaskTemplate, TaskDependency, EmailTask, EmailLog, SystemConfig } = require('../models');
 
 const initDatabase = async () => {
   try {
     console.log('开始初始化数据库...');
 
-    // 同步模型到数据库
+    // 同步模型到数据库（force: true 会删除现有表并重建）
     await sequelize.sync({ force: true });
     console.log('数据库表创建完成');
 
@@ -28,7 +28,8 @@ const initDatabase = async () => {
       role: 'manager',
       department: '网络部',
       phone: '13800138001',
-      status: 1
+      status: 1,
+      email: 'zhangsan@example.com'
     });
 
     await User.create({
@@ -38,7 +39,8 @@ const initDatabase = async () => {
       role: 'manager',
       department: '建设部',
       phone: '13800138002',
-      status: 1
+      status: 1,
+      email: 'lisi@example.com'
     });
     console.log('测试负责人创建完成');
 
@@ -279,6 +281,19 @@ const initDatabase = async () => {
     console.log('默认管理员账号: admin / admin123');
     console.log('测试负责人账号: manager1 / 123456');
     console.log('测试负责人账号: manager2 / 123456');
+    console.log('=====================================');
+    console.log('\n已创建的数据表:');
+    console.log('- users (用户表)');
+    console.log('- machine_rooms (机房表)');
+    console.log('- construction_phases (建设阶段表)');
+    console.log('- task_templates (任务模板表)');
+    console.log('- task_dependencies (任务依赖表)');
+    console.log('- room_tasks (机房任务表)');
+    console.log('- task_progress_logs (进度日志表)');
+    console.log('- operation_logs (操作日志表)');
+    console.log('- email_tasks (邮件任务表)');
+    console.log('- email_logs (邮件日志表)');
+    console.log('- system_configs (系统配置表)');
     console.log('=====================================');
     console.log('\n建设方式及节点数量:');
     console.log('- 购置类: 13个节点（含收房、产权办理）');

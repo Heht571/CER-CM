@@ -65,7 +65,10 @@ export default {
           { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
         ],
         real_name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-        role: [{ required: true, message: '请选择角色', trigger: 'change' }]
+        role: [{ required: true, message: '请选择角色', trigger: 'change' }],
+        email: [
+          { type: 'email', message: '邮箱格式不正确', trigger: 'blur' }
+        ]
       }
     }
   },

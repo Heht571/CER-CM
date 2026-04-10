@@ -749,6 +749,203 @@ const getProgress = async (req, res, next) => {
   }
 };
 
+/**
+ * 下载导入模板
+ */
+const downloadTemplate = async (req, res, next) => {
+  try {
+    const csvContent = `机房名称,机房编码,位置,建设方式,负责人姓名,计划开始日期,描述
+示例机房1,JF001,北京市朝阳区,购置,张三,2024-01-15,示例描述
+示例机房2,JF002,上海市浦东新区,租赁,李四,2024-02-01,`;
+
+    res.setHeader('Content-Type', 'text/csv;charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename=room_import_template.csv');
+    res.send('\uFEFF' + csvContent);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 批量导入机房
+ */
+const batchImport = async (req, res, next) => {
+  try {
+    const { data } = req.body;
+
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return fail(res, '导入数据不能为空');
+    }
+
+    // 建设方式映射
+    const constructionTypeMap = {
+      '购置': 'purchase',
+      '租赁': 'lease',
+      '自建': 'self_build',
+      '一体化集装箱': 'container',
+      '集装箱': 'container',
+      '利旧': 'reuse'
+    };
+
+    // 获取所有负责人
+    const managers = await User.findAll({
+      where: { role: 'manager', status: 1 },
+      attributes: ['id', 'real_name']
+    });
+    const managerMap = {};
+    managers.forEach(m => {
+      managerMap[m.real_name] = m.id;
+    });
+
+    // 获取所有任务节点和依赖关系
+    const nodes = await TaskTemplate.findAll({
+      order: [['graph_level', 'ASC'], ['graph_row', 'ASC']]
+    });
+    const dependencies = await TaskDependency.findAll();
+
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: []
+    };
+
+    const transaction = await sequelize.transaction();
+
+    try {
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        const rowNum = i + 2; // Excel行号从2开始（第1行是表头）
+
+        try {
+          const name = row['机房名称'] || row['name'];
+          const code = row['机房编码'] || row['code'];
+          const location = row['位置'] || row['location'];
+          const constructionTypeText = row['建设方式'] || row['construction_type'];
+          const managerName = row['负责人姓名'] || row['manager_name'];
+          const plannedStartDate = row['计划开始日期'] || row['planned_start_date'];
+          const description = row['描述'] || row['description'];
+
+          // 验证必填字段
+          if (!name) {
+            results.failed++;
+            results.errors.push(`第${rowNum}行: 机房名称不能为空`);
+            continue;
+          }
+
+          if (!plannedStartDate) {
+            results.failed++;
+            results.errors.push(`第${rowNum}行: 计划开始日期不能为空`);
+            continue;
+          }
+
+          // 解析建设方式
+          let constructionType = 'purchase';
+          if (constructionTypeText) {
+            constructionType = constructionTypeMap[constructionTypeText] || constructionTypeText;
+            if (!['purchase', 'lease', 'self_build', 'container', 'reuse'].includes(constructionType)) {
+              results.failed++;
+              results.errors.push(`第${rowNum}行: 建设方式"${constructionTypeText}"无效，有效值：购置、租赁、自建、一体化集装箱、利旧`);
+              continue;
+            }
+          }
+
+          // 检查编码是否重复
+          const normalizedCode = code ? code.trim() : null;
+          if (normalizedCode) {
+            const existRoom = await MachineRoom.findOne({ where: { code: normalizedCode }, transaction });
+            if (existRoom) {
+              results.failed++;
+              results.errors.push(`第${rowNum}行: 机房编码"${normalizedCode}"已存在`);
+              continue;
+            }
+          }
+
+          // 解析负责人
+          let managerId = null;
+          if (managerName) {
+            managerId = managerMap[managerName];
+            if (!managerId) {
+              results.failed++;
+              results.errors.push(`第${rowNum}行: 负责人"${managerName}"不存在或未启用`);
+              continue;
+            }
+          }
+
+          // 解析日期
+          const startDate = new Date(plannedStartDate);
+          if (isNaN(startDate.getTime())) {
+            results.failed++;
+            results.errors.push(`第${rowNum}行: 计划开始日期格式无效`);
+            continue;
+          }
+
+          // 创建机房
+          const room = await MachineRoom.create({
+            name,
+            code: normalizedCode,
+            location,
+            description,
+            manager_id: managerId,
+            planned_start_date: startDate,
+            construction_type: constructionType,
+            created_by: req.userId,
+            status: 'planning'
+          }, { transaction });
+
+          // 根据建设方式计算任务日期
+          const tasksWithDates = calculateTaskDates(nodes, dependencies, startDate, constructionType);
+
+          // 创建任务
+          const tasksToCreate = tasksWithDates.map(task => ({
+            room_id: room.id,
+            template_id: task.id,
+            phase_id: task.phase_id,
+            name: task.name,
+            planned_days: task.planned_days,
+            planned_start_date: task.planned_start_date,
+            planned_end_date: task.planned_end_date,
+            status: 'not_started',
+            progress: 0
+          }));
+
+          await RoomTask.bulkCreate(tasksToCreate, { transaction });
+
+          // 更新项目结束日期
+          const lastTask = tasksWithDates.reduce((latest, task) => {
+            if (!latest || new Date(task.planned_end_date) > new Date(latest.planned_end_date)) {
+              return task;
+            }
+            return latest;
+          }, null);
+
+          if (lastTask) {
+            await room.update({ planned_end_date: lastTask.planned_end_date }, { transaction });
+          }
+
+          results.success++;
+        } catch (error) {
+          results.failed++;
+          results.errors.push(`第${rowNum}行: ${error.message}`);
+        }
+      }
+
+      await transaction.commit();
+
+      let message = `导入完成：成功 ${results.success} 条`;
+      if (results.failed > 0) {
+        message += `，失败 ${results.failed} 条`;
+      }
+
+      success(res, results, message);
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getList,
   getDetail,
@@ -758,5 +955,7 @@ module.exports = {
   assignManager,
   updateStatus,
   getTasks,
-  getProgress
+  getProgress,
+  downloadTemplate,
+  batchImport
 };

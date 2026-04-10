@@ -302,9 +302,184 @@ const getRoomRanking = async (req, res, next) => {
   }
 };
 
+/**
+ * 按负责人分组统计机房建设情况
+ */
+const getByManager = async (req, res, next) => {
+  try {
+    // 获取所有启用的负责人
+    const managers = await User.findAll({
+      where: { role: 'manager', status: 1 },
+      attributes: ['id', 'real_name', 'department', 'phone'],
+      order: [['real_name', 'ASC']],
+      raw: true
+    });
+
+    // 获取每个机房的任务统计
+    const taskStats = await sequelize.query(
+      `SELECT room_id, COUNT(*) as total,
+              SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+              COALESCE(ROUND(AVG(progress)), 0) as progress
+       FROM room_tasks
+       GROUP BY room_id`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+
+    // 构建机房统计映射
+    const roomStatsMap = {};
+    taskStats.forEach(stat => {
+      roomStatsMap[stat.room_id] = {
+        total: parseInt(stat.total) || 0,
+        completed: parseInt(stat.completed) || 0,
+        progress: parseInt(stat.progress) || 0
+      };
+    });
+
+    // 获取每个机房最后更新时间（通过 task_progress_logs 关联 room_tasks）
+    const lastUpdateStats = await sequelize.query(
+      `SELECT rt.room_id, MAX(tpl.created_at) as last_update
+       FROM task_progress_logs tpl
+       JOIN room_tasks rt ON tpl.task_id = rt.id
+       GROUP BY rt.room_id`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+
+    const lastUpdateMap = {};
+    lastUpdateStats.forEach(stat => {
+      lastUpdateMap[stat.room_id] = stat.last_update;
+    });
+
+    // 获取所有机房信息
+    const rooms = await MachineRoom.findAll({
+      attributes: ['id', 'name', 'code', 'status', 'manager_id', 'updated_at'],
+      order: [['manager_id', 'ASC'], ['name', 'ASC']],
+      raw: true
+    });
+
+    // 按负责人分组
+    const managerMap = {};
+    managers.forEach(m => {
+      managerMap[m.id] = {
+        id: m.id,
+        name: m.real_name,
+        department: m.department,
+        phone: m.phone,
+        rooms: [],
+        stats: {
+          total: 0,
+          completed: 0,
+          in_progress: 0,
+          planning: 0,
+          paused: 0,
+          avgProgress: 0
+        },
+        lastUpdate: null,
+        idleDays: null
+      };
+    });
+
+    // 未分配负责人的机房
+    const unassigned = {
+      id: null,
+      name: '未分配',
+      department: '',
+      phone: '',
+      rooms: [],
+      stats: {
+        total: 0,
+        completed: 0,
+        in_progress: 0,
+        planning: 0,
+        paused: 0,
+        avgProgress: 0
+      },
+      lastUpdate: null,
+      idleDays: null
+    };
+
+    const now = new Date();
+
+    // 分配机房到负责人
+    rooms.forEach(room => {
+      const taskStats = roomStatsMap[room.id] || { total: 0, completed: 0, progress: 0 };
+      const lastUpdate = lastUpdateMap[room.id] || room.updated_at;
+
+      const roomData = {
+        id: room.id,
+        name: room.name,
+        code: room.code,
+        status: room.status,
+        progress: taskStats.progress,
+        totalTasks: taskStats.total,
+        completedTasks: taskStats.completed,
+        lastUpdate: lastUpdate
+      };
+
+      const targetManager = room.manager_id && managerMap[room.manager_id] ? managerMap[room.manager_id] : unassigned;
+      targetManager.rooms.push(roomData);
+      targetManager.stats.total++;
+
+      if (room.status === 'completed') {
+        targetManager.stats.completed++;
+      } else if (room.status === 'in_progress') {
+        targetManager.stats.in_progress++;
+      } else if (room.status === 'planning') {
+        targetManager.stats.planning++;
+      } else if (room.status === 'paused') {
+        targetManager.stats.paused++;
+      }
+
+      // 更新负责人的最后更新时间
+      if (lastUpdate) {
+        const updateTime = new Date(lastUpdate);
+        if (!targetManager.lastUpdate || updateTime > new Date(targetManager.lastUpdate)) {
+          targetManager.lastUpdate = lastUpdate;
+        }
+      }
+    });
+
+    // 计算平均进度和闲置天数
+    const result = Object.values(managerMap).map(manager => {
+      const progressSum = manager.rooms.reduce((sum, room) => sum + room.progress, 0);
+      manager.stats.avgProgress = manager.rooms.length > 0
+        ? Math.round(progressSum / manager.rooms.length)
+        : 0;
+
+      // 计算闲置天数
+      if (manager.lastUpdate) {
+        const diff = now - new Date(manager.lastUpdate);
+        manager.idleDays = Math.floor(diff / (1000 * 60 * 60 * 24));
+      }
+
+      return manager;
+    });
+
+    // 只返回有负责机房的负责人
+    const finalResult = result.filter(m => m.stats.total > 0);
+
+    // 如果有未分配的机房，添加到最后
+    if (unassigned.rooms.length > 0) {
+      const progressSum = unassigned.rooms.reduce((sum, room) => sum + room.progress, 0);
+      unassigned.stats.avgProgress = Math.round(progressSum / unassigned.rooms.length);
+
+      if (unassigned.lastUpdate) {
+        const diff = now - new Date(unassigned.lastUpdate);
+        unassigned.idleDays = Math.floor(diff / (1000 * 60 * 60 * 24));
+      }
+
+      finalResult.push(unassigned);
+    }
+
+    success(res, finalResult);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getOverview,
   getByPhase,
   getDelayed,
-  getRoomRanking
+  getRoomRanking,
+  getByManager
 };

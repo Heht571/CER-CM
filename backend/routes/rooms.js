@@ -361,4 +361,60 @@ router.put('/:id/assign', isAdmin, roomController.assignManager);
  */
 router.put('/:id/status', isAdmin, roomController.updateStatus);
 
+/**
+ * @swagger
+ * /rooms/template:
+ *   get:
+ *     summary: 下载机房导入模板
+ *     tags: [Rooms]
+ *     responses:
+ *       200:
+ *         description: 返回CSV模板文件
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ */
+router.get('/template', roomController.downloadTemplate);
+
+/**
+ * @swagger
+ * /rooms/import:
+ *   post:
+ *     summary: 批量导入机房
+ *     tags: [Rooms]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               data:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     机房名称:
+ *                       type: string
+ *                     机房编码:
+ *                       type: string
+ *                     位置:
+ *                       type: string
+ *                     建设方式:
+ *                       type: string
+ *                     负责人姓名:
+ *                       type: string
+ *                     计划开始日期:
+ *                       type: string
+ *                     描述:
+ *                       type: string
+ *     responses:
+ *       200:
+ *         description: 导入结果
+ */
+router.post('/import', isAdmin, roomController.batchImport);
+
 module.exports = router;

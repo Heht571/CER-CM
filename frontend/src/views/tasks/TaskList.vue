@@ -85,18 +85,14 @@
         <el-form-item label="所属机房">
           <span>{{ currentTask?.room?.name }}</span>
         </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="taskForm.status" style="width: 100%;">
-            <el-option
-              v-for="item in taskStatusOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            ></el-option>
-          </el-select>
-        </el-form-item>
         <el-form-item label="进度">
           <el-slider v-model="taskForm.progress" :min="0" :max="100" show-input></el-slider>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-tag :type="getAutoStatusType()" size="small">
+            {{ getAutoStatusText() }}
+          </el-tag>
+          <span class="status-hint">（根据进度自动计算）</span>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="taskForm.remark" type="textarea" rows="2"></el-input>
@@ -112,7 +108,6 @@
 
 <script>
 import { getMyRoomTasks, updateTask } from '@/api/task'
-import { TASK_STATUS_OPTIONS } from '@/utils/constants'
 import {
   getTaskStatusText,
   getTaskStatusType,
@@ -131,11 +126,9 @@ export default {
       dialogVisible: false,
       currentTask: null,
       taskForm: {
-        status: 'not_started',
         progress: 0,
         remark: ''
-      },
-      taskStatusOptions: TASK_STATUS_OPTIONS
+      }
     }
   },
   created() {
@@ -165,11 +158,22 @@ export default {
 
       this.currentTask = task
       this.taskForm = {
-        status: task.status,
         progress: task.progress,
         remark: ''
       }
       this.dialogVisible = true
+    },
+    getAutoStatusText() {
+      const progress = this.taskForm.progress
+      if (progress === 100) return '已完成'
+      if (progress > 0) return '进行中'
+      return '未开始'
+    },
+    getAutoStatusType() {
+      const progress = this.taskForm.progress
+      if (progress === 100) return 'success'
+      if (progress > 0) return 'warning'
+      return 'info'
     },
     async handleUpdate() {
       if (this.isTaskEditingLocked(this.currentTask)) {
@@ -181,16 +185,7 @@ export default {
         return
       }
 
-      if (this.taskForm.status === 'completed' && this.taskForm.progress !== 100) {
-        this.$message.warning('任务完成时进度必须为100%')
-        return
-      }
-      if (this.taskForm.status === 'not_started' && this.taskForm.progress > 0) {
-        this.$message.warning('任务未开始时进度应为0%')
-        return
-      }
       if (
-        this.taskForm.status === this.currentTask.status &&
         this.taskForm.progress === this.currentTask.progress &&
         !this.taskForm.remark
       ) {
@@ -200,7 +195,6 @@ export default {
 
       try {
         await updateTask(this.currentTask.id, {
-          status: this.taskForm.status,
           progress: this.taskForm.progress,
           remark: this.taskForm.remark
         })
@@ -350,5 +344,11 @@ export default {
 .view-detail {
   margin-top: 12px;
   text-align: right;
+}
+
+.status-hint {
+  font-size: 12px;
+  color: #909399;
+  margin-left: 8px;
 }
 </style>

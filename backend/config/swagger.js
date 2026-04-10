@@ -109,7 +109,9 @@ const options = {
       { name: 'Rooms', description: '机房管理接口' },
       { name: 'Tasks', description: '任务管理接口' },
       { name: 'Phases', description: '建设阶段接口' },
-      { name: 'Statistics', description: '统计分析接口' }
+      { name: 'Statistics', description: '统计分析接口' },
+      { name: 'Emails', description: '邮件管理接口' },
+      { name: 'Config', description: '系统配置接口' }
     ]
   },
   apis: [

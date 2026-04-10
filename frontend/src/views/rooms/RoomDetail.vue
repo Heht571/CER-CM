@@ -223,15 +223,14 @@
         <el-form-item label="计划日期">
           <span>{{ formatDate(currentTask?.planned_start_date) }} ~ {{ formatDate(currentTask?.planned_end_date) }}</span>
         </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="taskForm.status" style="width: 100%;">
-            <el-option label="未开始" value="not_started"></el-option>
-            <el-option label="进行中" value="in_progress"></el-option>
-            <el-option label="已完成" value="completed"></el-option>
-          </el-select>
-        </el-form-item>
         <el-form-item label="进度">
           <el-slider v-model="taskForm.progress" :min="0" :max="100" show-input></el-slider>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-tag :type="getAutoStatusType()" size="small">
+            {{ getAutoStatusText() }}
+          </el-tag>
+          <span class="status-hint">（根据进度自动计算）</span>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="taskForm.remark" type="textarea" rows="2"></el-input>
@@ -284,7 +283,6 @@ export default {
       selectedStatus: null,
       currentTask: null,
       taskForm: {
-        status: 'not_started',
         progress: 0,
         remark: ''
       },
@@ -426,11 +424,22 @@ export default {
 
       this.currentTask = task
       this.taskForm = {
-        status: task.status,
         progress: task.progress,
         remark: ''
       }
       this.taskDialogVisible = true
+    },
+    getAutoStatusText() {
+      const progress = this.taskForm.progress
+      if (progress === 100) return '已完成'
+      if (progress > 0) return '进行中'
+      return '未开始'
+    },
+    getAutoStatusType() {
+      const progress = this.taskForm.progress
+      if (progress === 100) return 'success'
+      if (progress > 0) return 'warning'
+      return 'info'
     },
     async handleTaskUpdate() {
       if (this.isTaskEditingLocked) {
@@ -442,18 +451,8 @@ export default {
         return
       }
 
-      // 数据校验：进度必须与状态匹配
-      if (this.taskForm.status === 'completed' && this.taskForm.progress !== 100) {
-        this.$message.warning('任务完成时进度必须为100%')
-        return
-      }
-      if (this.taskForm.status === 'not_started' && this.taskForm.progress > 0) {
-        this.$message.warning('任务未开始时进度应为0%')
-        return
-      }
       // 检查是否有变更
       if (
-        this.taskForm.status === this.currentTask.status &&
         this.taskForm.progress === this.currentTask.progress &&
         !this.taskForm.remark
       ) {
@@ -462,7 +461,6 @@ export default {
       }
       try {
         await updateTask(this.currentTask.id, {
-          status: this.taskForm.status,
           progress: this.taskForm.progress,
           remark: this.taskForm.remark
         })
@@ -620,5 +618,11 @@ export default {
 .legend-color.completed {
   background: #f0f9eb;
   border-color: #67c23a;
+}
+
+.status-hint {
+  font-size: 12px;
+  color: #909399;
+  margin-left: 8px;
 }
 </style>

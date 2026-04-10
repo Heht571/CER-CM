@@ -4,6 +4,16 @@ import Layout from '@/components/common/Layout.vue'
 
 Vue.use(VueRouter)
 
+// 解决 Vue Router 重复导航报错问题
+const originalPush = VueRouter.prototype.push
+VueRouter.prototype.push = function push(location) {
+  return originalPush.call(this, location).catch(err => {
+    if (err.name !== 'NavigationDuplicated') {
+      throw err
+    }
+  })
+}
+
 const routes = [
   {
     path: '/login',
@@ -79,6 +89,36 @@ const routes = [
         name: 'UserEdit',
         component: () => import('@/views/users/UserForm.vue'),
         meta: { title: '编辑用户', requiresAuth: true, requiresAdmin: true }
+      },
+      {
+        path: 'emails',
+        name: 'EmailList',
+        component: () => import('@/views/emails/EmailList.vue'),
+        meta: { title: '邮件管理', requiresAuth: true, requiresAdmin: true }
+      },
+      {
+        path: 'emails/create',
+        name: 'EmailCreate',
+        component: () => import('@/views/emails/EmailForm.vue'),
+        meta: { title: '创建邮件', requiresAuth: true, requiresAdmin: true }
+      },
+      {
+        path: 'emails/:id/edit',
+        name: 'EmailEdit',
+        component: () => import('@/views/emails/EmailForm.vue'),
+        meta: { title: '编辑邮件', requiresAuth: true, requiresAdmin: true }
+      },
+      {
+        path: 'emails/:id',
+        name: 'EmailDetail',
+        component: () => import('@/views/emails/EmailForm.vue'),
+        meta: { title: '邮件详情', requiresAuth: true, requiresAdmin: true }
+      },
+      {
+        path: 'settings/email',
+        name: 'EmailSettings',
+        component: () => import('@/views/settings/EmailSettings.vue'),
+        meta: { title: '邮件设置', requiresAuth: true, requiresAdmin: true }
       },
       {
         path: 'profile',

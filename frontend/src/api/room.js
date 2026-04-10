@@ -49,3 +49,13 @@ export function getRoomProgress(id) {
 export function getRoomLogs(id, params) {
   return request.get(`/rooms/${id}/logs`, { params })
 }
+
+// 下载导入模板
+export function downloadImportTemplate() {
+  return request.get('/rooms/template', { responseType: 'blob' })
+}
+
+// 批量导入机房
+export function batchImportRooms(data) {
+  return request.post('/rooms/import', { data })
+}

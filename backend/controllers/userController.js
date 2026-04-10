@@ -1,6 +1,27 @@
-const { User, MachineRoom, TaskProgressLog, sequelize } = require('../models');
+const { User, MachineRoom, TaskProgressLog, OperationLog, sequelize } = require('../models');
 const { success, fail, paginate } = require('../utils/response');
 const { Op } = require('sequelize');
+
+// 邮箱格式验证正则
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * 记录操作日志
+ */
+const logOperation = async (userId, action, targetType, targetId, detail, ip) => {
+  try {
+    await OperationLog.create({
+      user_id: userId,
+      action,
+      target_type: targetType,
+      target_id: targetId,
+      detail: JSON.stringify(detail),
+      ip
+    });
+  } catch (error) {
+    console.error('记录操作日志失败:', error);
+  }
+};
 
 /**
  * 获取用户列表
@@ -80,6 +101,11 @@ const create = async (req, res, next) => {
       return fail(res, '密码长度不能少于6位');
     }
 
+    // 邮箱格式验证
+    if (email && !EMAIL_REGEX.test(email)) {
+      return fail(res, '邮箱格式不正确');
+    }
+
     const existUser = await User.findOne({ where: { username } });
     if (existUser) {
       return fail(res, '用户名已存在');
@@ -95,6 +121,13 @@ const create = async (req, res, next) => {
       email
     });
 
+    // 记录操作日志
+    await logOperation(req.userId, 'create_user', 'user', user.id, {
+      username,
+      real_name,
+      role
+    }, req.ip);
+
     success(res, { id: user.id }, '创建成功');
   } catch (error) {
     next(error);
@@ -108,6 +141,11 @@ const update = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { real_name, role, department, phone, email, status } = req.body;
+
+    // 邮箱格式验证
+    if (email && !EMAIL_REGEX.test(email)) {
+      return fail(res, '邮箱格式不正确');
+    }
 
     const user = await User.findByPk(id);
     if (!user) {
@@ -145,6 +183,14 @@ const update = async (req, res, next) => {
       email,
       status: nextStatus
     });
+
+    // 记录操作日志
+    await logOperation(req.userId, 'update_user', 'user', id, {
+      real_name,
+      role: nextRole,
+      status: nextStatus
+    }, req.ip);
+
     success(res, null, '更新成功');
   } catch (error) {
     next(error);
@@ -176,6 +222,13 @@ const remove = async (req, res, next) => {
     const transaction = await sequelize.transaction();
 
     try {
+      // 记录操作日志（在删除前记录用户信息）
+      await logOperation(req.userId, 'delete_user', 'user', id, {
+        username: user.username,
+        real_name: user.real_name,
+        role: user.role
+      }, req.ip);
+
       await TaskProgressLog.destroy({
         where: { user_id: id },
         transaction
@@ -227,7 +280,111 @@ const resetPassword = async (req, res, next) => {
     user.password = newPassword;
     await user.save();
 
+    // 记录操作日志
+    await logOperation(req.userId, 'reset_password', 'user', id, {
+      username: user.username
+    }, req.ip);
+
     success(res, null, '密码重置成功');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 批量更新用户状态
+ */
+const batchUpdateStatus = async (req, res, next) => {
+  try {
+    const { ids, status } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return fail(res, '请选择要操作的用户');
+    }
+
+    if (![0, 1].includes(Number(status))) {
+      return fail(res, '状态值无效');
+    }
+
+    const targetStatus = Number(status);
+
+    // 不能修改自己的状态
+    if (ids.includes(req.userId)) {
+      return fail(res, '不能修改自己的状态');
+    }
+
+    // 检查是否有管理员被禁用
+    if (targetStatus === 0) {
+      const adminIds = await User.findAll({
+        where: { id: ids, role: 'admin', status: 1 },
+        attributes: ['id']
+      }).then(users => users.map(u => u.id));
+
+      if (adminIds.length > 0) {
+        const activeAdminCount = await User.count({ where: { role: 'admin', status: 1 } });
+        if (activeAdminCount <= adminIds.length) {
+          return fail(res, '至少保留一个启用状态的管理员');
+        }
+      }
+    }
+
+    // 检查是否有负责机房的负责人被禁用
+    if (targetStatus === 0) {
+      const managersWithRooms = await MachineRoom.findAll({
+        where: { manager_id: ids },
+        attributes: ['manager_id']
+      }).then(rooms => [...new Set(rooms.map(r => r.manager_id))]);
+
+      if (managersWithRooms.length > 0) {
+        return fail(res, '部分用户仍负责机房，请先完成机房移交');
+      }
+    }
+
+    await User.update(
+      { status: targetStatus },
+      { where: { id: ids } }
+    );
+
+    // 记录操作日志
+    await logOperation(req.userId, 'batch_update_status', 'user', null, {
+      ids,
+      status: targetStatus,
+      count: ids.length
+    }, req.ip);
+
+    success(res, null, `已${targetStatus === 1 ? '启用' : '禁用'} ${ids.length} 个用户`);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 获取用户操作历史
+ */
+const getUserLogs = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { page = 1, pageSize = 20 } = req.query;
+
+    const user = await User.findByPk(id);
+    if (!user) {
+      return fail(res, '用户不存在', 404);
+    }
+
+    const { count, rows } = await OperationLog.findAndCountAll({
+      where: { user_id: id },
+      order: [['created_at', 'DESC']],
+      offset: (page - 1) * pageSize,
+      limit: parseInt(pageSize)
+    });
+
+    // 解析 detail JSON
+    const logs = rows.map(log => ({
+      ...log.toJSON(),
+      detail: log.detail ? JSON.parse(log.detail) : null
+    }));
+
+    paginate(res, logs, count, page, pageSize);
   } catch (error) {
     next(error);
   }
@@ -240,5 +397,7 @@ module.exports = {
   update,
   remove,
   getManagers,
-  resetPassword
+  resetPassword,
+  batchUpdateStatus,
+  getUserLogs
 };

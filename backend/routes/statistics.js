@@ -202,4 +202,65 @@ router.get('/delayed', isAdmin, statisticsController.getDelayed);
  */
 router.get('/ranking', isAdmin, statisticsController.getRoomRanking);
 
+/**
+ * @swagger
+ * /statistics/by-manager:
+ *   get:
+ *     summary: 按负责人分组统计
+ *     description: 获取每个负责人负责的机房建设情况
+ *     tags: [Statistics]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取负责人统计
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       name:
+ *                         type: string
+ *                       department:
+ *                         type: string
+ *                       stats:
+ *                         type: object
+ *                         properties:
+ *                           total:
+ *                             type: integer
+ *                           completed:
+ *                             type: integer
+ *                           in_progress:
+ *                             type: integer
+ *                           planning:
+ *                             type: integer
+ *                           paused:
+ *                             type: integer
+ *                           avgProgress:
+ *                             type: integer
+ *                       rooms:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             id:
+ *                               type: integer
+ *                             name:
+ *                               type: string
+ *                             status:
+ *                               type: string
+ *                             progress:
+ *                               type: integer
+ */
+router.get('/by-manager', isAdmin, statisticsController.getByManager);
+
 module.exports = router;

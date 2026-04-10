@@ -64,7 +64,10 @@ const actions = {
   },
   logout({ commit }) {
     commit('LOGOUT')
-    router.push('/login')
+    // 避免重复导航到登录页的警告
+    if (router.currentRoute.path !== '/login') {
+      router.push('/login')
+    }
   }
 }
 

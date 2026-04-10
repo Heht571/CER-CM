@@ -10,6 +10,8 @@ const { isAdmin } = require('./middleware/authorize');
 const errorHandler = require('./middleware/errorHandler');
 const routes = require('./routes');
 const logger = require('./utils/logger');
+const { initEmailService } = require('./utils/emailService');
+const { initScheduler } = require('./utils/scheduler');
 
 const app = express();
 
@@ -59,6 +61,10 @@ app.use((req, res) => {
 
 // 错误处理
 app.use(errorHandler);
+
+// 初始化邮件服务和调度器
+initEmailService();
+initScheduler().catch(err => logger.error('调度器初始化失败:', err));
 
 // 启动服务器
 const PORT = config.port;

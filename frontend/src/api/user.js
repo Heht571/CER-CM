@@ -34,3 +34,13 @@ export function getManagers() {
 export function resetPassword(id, data) {
   return request.put(`/users/${id}/reset-password`, data)
 }
+
+// 批量更新用户状态
+export function batchUpdateStatus(data) {
+  return request.put('/users/batch-status', data)
+}
+
+// 获取用户操作日志
+export function getUserLogs(id, params) {
+  return request.get(`/users/${id}/logs`, { params })
+}

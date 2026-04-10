@@ -7,6 +7,9 @@ const TaskDependency = require('./TaskDependency');
 const RoomTask = require('./RoomTask');
 const TaskProgressLog = require('./TaskProgressLog');
 const OperationLog = require('./OperationLog');
+const EmailTask = require('./EmailTask');
+const EmailLog = require('./EmailLog');
+const SystemConfig = require('./SystemConfig');
 
 // 定义模型关联关系
 
@@ -62,6 +65,18 @@ TaskProgressLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 User.hasMany(OperationLog, { foreignKey: 'user_id', as: 'operationLogs' });
 OperationLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
+// 用户 - 邮件任务（创建人）
+User.hasMany(EmailTask, { foreignKey: 'created_by', as: 'createdEmailTasks' });
+EmailTask.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+
+// 邮件任务 - 发送日志
+EmailTask.hasMany(EmailLog, { foreignKey: 'task_id', as: 'logs' });
+EmailLog.belongsTo(EmailTask, { foreignKey: 'task_id', as: 'task' });
+
+// 用户 - 系统配置（修改人）
+User.hasMany(SystemConfig, { foreignKey: 'updated_by', as: 'updatedConfigs' });
+SystemConfig.belongsTo(User, { foreignKey: 'updated_by', as: 'updater' });
+
 module.exports = {
   sequelize,
   User,
@@ -71,5 +86,8 @@ module.exports = {
   TaskDependency,
   RoomTask,
   TaskProgressLog,
-  OperationLog
+  OperationLog,
+  EmailTask,
+  EmailLog,
+  SystemConfig
 };

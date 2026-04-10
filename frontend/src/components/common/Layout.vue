@@ -46,6 +46,14 @@
           <i class="el-icon-s-custom"></i>
           <span slot="title">用户管理</span>
         </el-menu-item>
+        <el-menu-item v-if="isAdmin" index="/emails">
+          <i class="el-icon-message"></i>
+          <span slot="title">邮件管理</span>
+        </el-menu-item>
+        <el-menu-item v-if="isAdmin" index="/settings/email">
+          <i class="el-icon-setting"></i>
+          <span slot="title">系统设置</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -87,6 +95,14 @@
           <el-menu-item v-if="isAdmin" index="/users">
             <i class="el-icon-s-custom"></i>
             <span slot="title">用户管理</span>
+          </el-menu-item>
+          <el-menu-item v-if="isAdmin" index="/emails">
+            <i class="el-icon-message"></i>
+            <span slot="title">邮件管理</span>
+          </el-menu-item>
+          <el-menu-item v-if="isAdmin" index="/settings/email">
+            <i class="el-icon-setting"></i>
+            <span slot="title">系统设置</span>
           </el-menu-item>
         </el-menu>
       </div>
