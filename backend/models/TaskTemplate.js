@@ -54,7 +54,10 @@ TaskTemplate.init({
 }, {
   sequelize,
   modelName: 'TaskTemplate',
-  tableName: 'task_templates'
+  tableName: 'task_templates',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
 });
 
 module.exports = TaskTemplate;

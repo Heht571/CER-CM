@@ -31,7 +31,10 @@ ConstructionPhase.init({
 }, {
   sequelize,
   modelName: 'ConstructionPhase',
-  tableName: 'construction_phases'
+  tableName: 'construction_phases',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
 });
 
 module.exports = ConstructionPhase;

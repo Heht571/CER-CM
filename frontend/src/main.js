@@ -8,10 +8,36 @@ import 'element-ui/lib/theme-chalk/index.css'
 Vue.config.productionTip = false
 Vue.use(ElementUI)
 
+// 解析JWT token获取过期时间
+const parseJwtExp = (token) => {
+  if (!token) return null
+  try {
+    const payload = token.split('.')[1]
+    const decoded = JSON.parse(atob(payload))
+    return decoded.exp ? decoded.exp * 1000 : null
+  } catch (e) {
+    return null
+  }
+}
+
+// 检查token是否过期
+const isTokenExpired = (token) => {
+  const exp = parseJwtExp(token)
+  if (!exp) return true
+  return Date.now() > exp
+}
+
 router.beforeEach(async (to, from, next) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
   const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin)
   let { token, user } = store.state.auth
+
+  // 检查token是否过期
+  if (token && isTokenExpired(token)) {
+    store.commit('auth/LOGOUT')
+    token = ''
+    user = {}
+  }
 
   if (requiresAuth && !token) {
     next('/login')

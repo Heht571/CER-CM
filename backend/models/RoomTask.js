@@ -67,7 +67,10 @@ RoomTask.init({
 }, {
   sequelize,
   modelName: 'RoomTask',
-  tableName: 'room_tasks'
+  tableName: 'room_tasks',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
 });
 
 module.exports = RoomTask;

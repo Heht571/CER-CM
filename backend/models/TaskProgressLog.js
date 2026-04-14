@@ -43,6 +43,8 @@ TaskProgressLog.init({
   sequelize,
   modelName: 'TaskProgressLog',
   tableName: 'task_progress_logs',
+  timestamps: true,
+  createdAt: 'created_at',
   updatedAt: false
 });
 

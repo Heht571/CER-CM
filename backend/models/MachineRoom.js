@@ -68,7 +68,10 @@ MachineRoom.init({
 }, {
   sequelize,
   modelName: 'MachineRoom',
-  tableName: 'machine_rooms'
+  tableName: 'machine_rooms',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
 });
 
 module.exports = MachineRoom;

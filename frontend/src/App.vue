@@ -5,8 +5,17 @@
 </template>
 
 <script>
+import { mapActions, mapGetters } from 'vuex'
+
 export default {
-  name: 'App'
+  name: 'App',
+  computed: {
+    ...mapGetters('auth', ['isLoggedIn'])
+  },
+  created() {
+    // 应用启动时检查token是否过期
+    this.$store.dispatch('auth/checkAuth')
+  }
 }
 </script>
 

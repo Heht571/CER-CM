@@ -27,7 +27,10 @@ TaskDependency.init({
 }, {
   sequelize,
   modelName: 'TaskDependency',
-  tableName: 'task_dependencies'
+  tableName: 'task_dependencies',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
 });
 
 module.exports = TaskDependency;

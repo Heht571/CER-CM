@@ -38,6 +38,8 @@ OperationLog.init({
   sequelize,
   modelName: 'OperationLog',
   tableName: 'operation_logs',
+  timestamps: true,
+  createdAt: 'created_at',
   updatedAt: false
 });
 

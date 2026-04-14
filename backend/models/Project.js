@@ -35,7 +35,10 @@ Project.init({
 }, {
   sequelize,
   modelName: 'Project',
-  tableName: 'projects'
+  tableName: 'projects',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
 });
 
 module.exports = Project;

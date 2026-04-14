@@ -43,6 +43,8 @@ RoomChangeLog.init({
   sequelize,
   modelName: 'RoomChangeLog',
   tableName: 'room_change_logs',
+  timestamps: true,
+  createdAt: 'created_at',
   updatedAt: false
 });
 
