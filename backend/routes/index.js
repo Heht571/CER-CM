@@ -11,6 +11,7 @@ const phaseRoutes = require('./phases');
 const statisticsRoutes = require('./statistics');
 const emailRoutes = require('./emails');
 const configRoutes = require('./config');
+const projectRoutes = require('./projects');
 const roomController = require('../controllers/roomController');
 
 // 公开路由
@@ -27,5 +28,6 @@ router.use('/phases', auth, phaseRoutes);
 router.use('/statistics', auth, statisticsRoutes);
 router.use('/emails', auth, isAdmin, emailRoutes);
 router.use('/config', auth, isAdmin, configRoutes);
+router.use('/projects', auth, projectRoutes);
 
 module.exports = router;

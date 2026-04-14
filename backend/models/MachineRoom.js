@@ -60,6 +60,10 @@ MachineRoom.init({
     type: DataTypes.ENUM('purchase', 'lease', 'self_build', 'container', 'reuse'),
     defaultValue: 'purchase',
     comment: '建设方式：purchase-购置，lease-租赁，self_build-自建，container-一体化集装箱，reuse-利旧'
+  },
+  project_id: {
+    type: DataTypes.INTEGER,
+    comment: '所属项目ID'
   }
 }, {
   sequelize,

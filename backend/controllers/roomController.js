@@ -1,6 +1,30 @@
-const { MachineRoom, User, RoomTask, TaskProgressLog, TaskTemplate, TaskDependency, ConstructionPhase, sequelize } = require('../models');
+const { MachineRoom, User, RoomTask, TaskProgressLog, TaskTemplate, TaskDependency, ConstructionPhase, RoomChangeLog, Project, sequelize } = require('../models');
 const { success, fail } = require('../utils/response');
 const { Op } = require('sequelize');
+
+// 变更类型映射
+const CHANGE_TYPE_MAP = {
+  name: 'name_change',
+  code: 'code_change',
+  location: 'location_change',
+  construction_type: 'type_change',
+  manager_id: 'manager_change',
+  project_id: 'project_change',
+  planned_start_date: 'date_change',
+  description: 'desc_change'
+};
+
+// 记录变更日志
+const recordChange = async (roomId, changeType, oldValue, newValue, changedBy, reason, transaction) => {
+  await RoomChangeLog.create({
+    room_id: roomId,
+    change_type: changeType,
+    old_value: oldValue ? String(oldValue) : null,
+    new_value: newValue ? String(newValue) : null,
+    change_reason: reason,
+    changed_by: changedBy
+  }, { transaction });
+};
 
 /**
  * 根据开始日期、网络图依赖关系和建设方式计算所有任务的计划日期
@@ -125,7 +149,7 @@ const calculateTaskSummary = (tasks = []) => {
  */
 const getList = async (req, res, next) => {
   try {
-    const { page = 1, pageSize = 10, keyword, status, manager_id, construction_type } = req.query;
+    const { page = 1, pageSize = 10, keyword, status, manager_id, construction_type, project_id } = req.query;
 
     const where = {};
     if (keyword) {
@@ -136,6 +160,7 @@ const getList = async (req, res, next) => {
     }
     if (status) where.status = status;
     if (construction_type) where.construction_type = construction_type;
+    if (project_id) where.project_id = project_id;
 
     if (req.user.role === 'manager') {
       where.manager_id = req.userId;
@@ -149,6 +174,10 @@ const getList = async (req, res, next) => {
         model: User,
         as: 'manager',
         attributes: ['id', 'real_name', 'phone']
+      }, {
+        model: Project,
+        as: 'project',
+        attributes: ['id', 'name', 'code']
       }],
       order: [['created_at', 'DESC']],
       offset: (page - 1) * pageSize,
@@ -193,6 +222,10 @@ const getDetail = async (req, res, next) => {
         model: User,
         as: 'creator',
         attributes: ['id', 'real_name']
+      }, {
+        model: Project,
+        as: 'project',
+        attributes: ['id', 'name', 'code']
       }]
     });
 
@@ -313,7 +346,7 @@ const create = async (req, res, next) => {
 const update = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, code, location, description, planned_start_date, construction_type, manager_id } = req.body;
+    const { name, code, location, description, planned_start_date, construction_type, manager_id, project_id, change_reason } = req.body;
     const normalizedCode = normalizeOptionalCode(code);
     const transaction = await sequelize.transaction();
 
@@ -342,6 +375,15 @@ const update = async (req, res, next) => {
         }
       }
 
+      const hasProjectId = Object.prototype.hasOwnProperty.call(req.body, 'project_id');
+      if (hasProjectId && project_id) {
+        const project = await Project.findByPk(project_id, { transaction });
+        if (!project || project.status !== 'active') {
+          await transaction.rollback();
+          return fail(res, '项目不存在或已归档');
+        }
+      }
+
       const hasPlannedStartDate = Object.prototype.hasOwnProperty.call(req.body, 'planned_start_date');
       const hasConstructionType = Object.prototype.hasOwnProperty.call(req.body, 'construction_type');
       const shouldRecalculateTasks = (
@@ -366,6 +408,42 @@ const update = async (req, res, next) => {
         }
       }
 
+      // 记录变更日志
+      const changes = [];
+
+      // 检查并记录每个字段的变更
+      if (name && name !== room.name) {
+        changes.push({ type: 'name_change', old: room.name, new: name });
+      }
+      if (hasCode && normalizedCode !== room.code) {
+        changes.push({ type: 'code_change', old: room.code, new: normalizedCode });
+      }
+      if (location !== undefined && location !== room.location) {
+        changes.push({ type: 'location_change', old: room.location, new: location });
+      }
+      if (hasConstructionType && construction_type !== room.construction_type) {
+        changes.push({ type: 'type_change', old: room.construction_type, new: construction_type });
+      }
+      if (hasManagerId && manager_id !== room.manager_id) {
+        // 获取原负责人和新负责人姓名用于记录
+        const oldManager = room.manager_id ? await User.findByPk(room.manager_id, { attributes: ['real_name'], transaction }) : null;
+        const newManager = manager_id ? await User.findByPk(manager_id, { attributes: ['real_name'], transaction }) : null;
+        changes.push({ type: 'manager_change', old: oldManager?.real_name || '未分配', new: newManager?.real_name || '未分配' });
+      }
+      if (hasProjectId && project_id !== room.project_id) {
+        const oldProject = room.project_id ? await Project.findByPk(room.project_id, { attributes: ['name'], transaction }) : null;
+        const newProject = project_id ? await Project.findByPk(project_id, { attributes: ['name'], transaction }) : null;
+        changes.push({ type: 'project_change', old: oldProject?.name || '未分配', new: newProject?.name || '未分配' });
+      }
+      if (hasPlannedStartDate && planned_start_date !== room.planned_start_date) {
+        changes.push({ type: 'date_change', old: room.planned_start_date, new: planned_start_date });
+      }
+
+      // 保存变更记录
+      for (const change of changes) {
+        await recordChange(id, change.type, change.old, change.new, req.userId, change_reason, transaction);
+      }
+
       const roomUpdateData = {
         name,
         location,
@@ -380,6 +458,10 @@ const update = async (req, res, next) => {
 
       if (hasManagerId) {
         roomUpdateData.manager_id = manager_id || null;
+      }
+
+      if (hasProjectId) {
+        roomUpdateData.project_id = project_id || null;
       }
 
       await room.update(roomUpdateData, { transaction });
@@ -494,6 +576,76 @@ const remove = async (req, res, next) => {
       await room.destroy({ transaction });
       await transaction.commit();
       success(res, null, '删除成功');
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 批量删除机房
+ */
+const batchRemove = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return fail(res, '请选择要删除的机房');
+    }
+
+    const transaction = await sequelize.transaction();
+
+    try {
+      // 检查所有机房是否存在
+      const rooms = await MachineRoom.findAll({
+        where: { id: { [Op.in]: ids } },
+        transaction
+      });
+
+      if (rooms.length !== ids.length) {
+        await transaction.rollback();
+        return fail(res, '部分机房不存在');
+      }
+
+      // 获取所有关联的任务ID
+      const tasks = await RoomTask.findAll({
+        where: { room_id: { [Op.in]: ids } },
+        attributes: ['id'],
+        transaction
+      });
+      const taskIds = tasks.map(task => task.id);
+
+      // 删除进度日志
+      if (taskIds.length > 0) {
+        await TaskProgressLog.destroy({
+          where: { task_id: { [Op.in]: taskIds } },
+          transaction
+        });
+      }
+
+      // 删除变更记录
+      await RoomChangeLog.destroy({
+        where: { room_id: { [Op.in]: ids } },
+        transaction
+      });
+
+      // 删除任务
+      await RoomTask.destroy({
+        where: { room_id: { [Op.in]: ids } },
+        transaction
+      });
+
+      // 删除机房
+      await MachineRoom.destroy({
+        where: { id: { [Op.in]: ids } },
+        transaction
+      });
+
+      await transaction.commit();
+      success(res, { deleted: ids.length }, `成功删除 ${ids.length} 个机房`);
     } catch (error) {
       await transaction.rollback();
       throw error;
@@ -754,9 +906,9 @@ const getProgress = async (req, res, next) => {
  */
 const downloadTemplate = async (req, res, next) => {
   try {
-    const csvContent = `机房名称,机房编码,位置,建设方式,负责人姓名,计划开始日期,描述
-示例机房1,JF001,北京市朝阳区,购置,张三,2024-01-15,示例描述
-示例机房2,JF002,上海市浦东新区,租赁,李四,2024-02-01,`;
+    const csvContent = `机房名称,机房编码,位置,建设方式,负责人姓名,所属项目,计划开始日期,描述
+示例机房1,JF001,北京市朝阳区,购置,张三,默认项目,2024-01-15,示例描述
+示例机房2,JF002,上海市浦东新区,租赁,李四,默认项目,2024-02-01,`;
 
     res.setHeader('Content-Type', 'text/csv;charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename=room_import_template.csv');
@@ -797,6 +949,17 @@ const batchImport = async (req, res, next) => {
       managerMap[m.real_name] = m.id;
     });
 
+    // 获取所有活跃项目
+    const projects = await Project.findAll({
+      where: { status: 'active' },
+      attributes: ['id', 'name', 'code']
+    });
+    const projectMap = {};
+    projects.forEach(p => {
+      projectMap[p.name] = p.id;
+      projectMap[p.code] = p.id; // 也支持用项目编码匹配
+    });
+
     // 获取所有任务节点和依赖关系
     const nodes = await TaskTemplate.findAll({
       order: [['graph_level', 'ASC'], ['graph_row', 'ASC']]
@@ -822,6 +985,7 @@ const batchImport = async (req, res, next) => {
           const location = row['位置'] || row['location'];
           const constructionTypeText = row['建设方式'] || row['construction_type'];
           const managerName = row['负责人姓名'] || row['manager_name'];
+          const projectName = row['所属项目'] || row['project_name'] || row['项目'];
           const plannedStartDate = row['计划开始日期'] || row['planned_start_date'];
           const description = row['描述'] || row['description'];
 
@@ -871,6 +1035,17 @@ const batchImport = async (req, res, next) => {
             }
           }
 
+          // 解析项目
+          let projectId = null;
+          if (projectName) {
+            projectId = projectMap[projectName];
+            if (!projectId) {
+              results.failed++;
+              results.errors.push(`第${rowNum}行: 所属项目"${projectName}"不存在或已归档`);
+              continue;
+            }
+          }
+
           // 解析日期
           const startDate = new Date(plannedStartDate);
           if (isNaN(startDate.getTime())) {
@@ -886,6 +1061,7 @@ const batchImport = async (req, res, next) => {
             location,
             description,
             manager_id: managerId,
+            project_id: projectId,
             planned_start_date: startDate,
             construction_type: constructionType,
             created_by: req.userId,
@@ -946,16 +1122,69 @@ const batchImport = async (req, res, next) => {
   }
 };
 
+/**
+ * 获取机房变更历史
+ */
+const getChangeHistory = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const room = await MachineRoom.findByPk(id);
+    if (!room) {
+      return fail(res, '机房不存在', 404);
+    }
+
+    const changeLogs = await RoomChangeLog.findAll({
+      where: { room_id: id },
+      include: [{
+        model: User,
+        as: 'changer',
+        attributes: ['id', 'real_name']
+      }],
+      order: [['created_at', 'DESC']]
+    });
+
+    // 变更类型中文映射
+    const changeTypeText = {
+      name_change: '名称变更',
+      code_change: '编码变更',
+      location_change: '地点变更',
+      type_change: '建设方式变更',
+      manager_change: '负责人变更',
+      project_change: '所属项目变更',
+      date_change: '计划日期变更',
+      desc_change: '描述变更'
+    };
+
+    const result = changeLogs.map(log => ({
+      id: log.id,
+      changeType: log.change_type,
+      changeTypeText: changeTypeText[log.change_type] || log.change_type,
+      oldValue: log.old_value,
+      newValue: log.new_value,
+      changeReason: log.change_reason,
+      changer: log.changer,
+      createdAt: log.created_at
+    }));
+
+    success(res, result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getList,
   getDetail,
   create,
   update,
   remove,
+  batchRemove,
   assignManager,
   updateStatus,
   getTasks,
   getProgress,
   downloadTemplate,
-  batchImport
+  batchImport,
+  getChangeHistory
 };

@@ -10,6 +10,8 @@ const OperationLog = require('./OperationLog');
 const EmailTask = require('./EmailTask');
 const EmailLog = require('./EmailLog');
 const SystemConfig = require('./SystemConfig');
+const Project = require('./Project');
+const RoomChangeLog = require('./RoomChangeLog');
 
 // 定义模型关联关系
 
@@ -77,6 +79,22 @@ EmailLog.belongsTo(EmailTask, { foreignKey: 'task_id', as: 'task' });
 User.hasMany(SystemConfig, { foreignKey: 'updated_by', as: 'updatedConfigs' });
 SystemConfig.belongsTo(User, { foreignKey: 'updated_by', as: 'updater' });
 
+// 项目 - 机房
+Project.hasMany(MachineRoom, { foreignKey: 'project_id', as: 'rooms' });
+MachineRoom.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
+// 项目 - 用户（创建人）
+User.hasMany(Project, { foreignKey: 'created_by', as: 'createdProjects' });
+Project.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+
+// 机房 - 变更记录
+MachineRoom.hasMany(RoomChangeLog, { foreignKey: 'room_id', as: 'changeLogs' });
+RoomChangeLog.belongsTo(MachineRoom, { foreignKey: 'room_id', as: 'room' });
+
+// 用户 - 变更记录（操作人）
+User.hasMany(RoomChangeLog, { foreignKey: 'changed_by', as: 'changeLogs' });
+RoomChangeLog.belongsTo(User, { foreignKey: 'changed_by', as: 'changer' });
+
 module.exports = {
   sequelize,
   User,
@@ -89,5 +107,7 @@ module.exports = {
   OperationLog,
   EmailTask,
   EmailLog,
-  SystemConfig
+  SystemConfig,
+  Project,
+  RoomChangeLog
 };

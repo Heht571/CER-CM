@@ -1,5 +1,5 @@
-require('dotenv').config();
-const { sequelize, User, ConstructionPhase, TaskTemplate, TaskDependency, EmailTask, EmailLog, SystemConfig } = require('../models');
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
+const { sequelize, User, ConstructionPhase, TaskTemplate, TaskDependency, EmailTask, EmailLog, SystemConfig, Project, RoomChangeLog } = require('../models');
 
 const initDatabase = async () => {
   try {
@@ -284,7 +284,9 @@ const initDatabase = async () => {
     console.log('=====================================');
     console.log('\n已创建的数据表:');
     console.log('- users (用户表)');
+    console.log('- projects (项目表)');
     console.log('- machine_rooms (机房表)');
+    console.log('- room_change_logs (机房变更记录表)');
     console.log('- construction_phases (建设阶段表)');
     console.log('- task_templates (任务模板表)');
     console.log('- task_dependencies (任务依赖表)');

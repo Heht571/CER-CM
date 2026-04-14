@@ -3,11 +3,14 @@ node_modules/
 
 # Build output
 dist/
+build/
 
-# Environment files
+# Environment files (包含敏感信息，不要上传)
 .env
 .env.local
 .env.*.local
+backend/.env
+frontend/.env
 
 # IDE
 .idea/
@@ -23,9 +26,33 @@ Thumbs.db
 logs/
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Cache
 .cache/
+.npm/
+.eslintcache
 
 # Coverage
 coverage/
+.nyc_output/
+
+# Claude Code 工作目录
+.claude/
+
+# Codebuddy
+.codebuddy/
+
+# 临时文件
+*.tmp
+*.temp
+tmp/
+temp/
+
+# 数据库备份
+*.sql.bak
+database/backups/
+
+# 上传文件目录（如有）
+uploads/

@@ -39,6 +39,16 @@
             ></el-option>
           </el-select>
         </el-form-item>
+        <el-form-item label="所属项目">
+          <el-select v-model="form.project_id" placeholder="请选择所属项目" clearable>
+            <el-option
+              v-for="project in projects"
+              :key="project.id"
+              :label="project.name"
+              :value="project.id"
+            ></el-option>
+          </el-select>
+        </el-form-item>
         <el-form-item label="项目开始日期" prop="planned_start_date">
           <el-date-picker
             v-model="form.planned_start_date"
@@ -49,6 +59,9 @@
         </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" rows="3" placeholder="请输入描述"></el-input>
+        </el-form-item>
+        <el-form-item label="变更原因">
+          <el-input v-model="form.change_reason" type="textarea" rows="2" placeholder="请输入变更原因（可选）"></el-input>
         </el-form-item>
 
         <el-form-item style="margin-top: 20px;">
@@ -63,6 +76,7 @@
 <script>
 import { getRoomDetail, updateRoom } from '@/api/room'
 import { getManagers } from '@/api/user'
+import { getActiveProjects } from '@/api/project'
 import { getConstructionTypeDesc } from '@/utils'
 
 export default {
@@ -71,15 +85,18 @@ export default {
     return {
       loading: false,
       managers: [],
+      projects: [],
       roomId: null,
       form: {
         name: '',
         code: '',
         location: '',
         manager_id: null,
+        project_id: null,
         planned_start_date: null,
         construction_type: 'purchase',
-        description: ''
+        description: '',
+        change_reason: ''
       },
       originalSchedule: {
         planned_start_date: null,
@@ -112,6 +129,7 @@ export default {
   created() {
     this.roomId = this.$route.params.id
     this.loadManagers()
+    this.loadProjects()
     this.loadRoom()
   },
   methods: {
@@ -119,6 +137,14 @@ export default {
       try {
         const res = await getManagers()
         this.managers = res.data
+      } catch (error) {
+        console.error(error)
+      }
+    },
+    async loadProjects() {
+      try {
+        const res = await getActiveProjects()
+        this.projects = res.data
       } catch (error) {
         console.error(error)
       }
@@ -132,9 +158,11 @@ export default {
           code: room.code || '',
           location: room.location,
           manager_id: room.manager_id,
+          project_id: room.project_id,
           planned_start_date: room.planned_start_date,
           construction_type: room.construction_type,
-          description: room.description
+          description: room.description,
+          change_reason: ''
         }
         this.originalSchedule = {
           planned_start_date: room.planned_start_date,

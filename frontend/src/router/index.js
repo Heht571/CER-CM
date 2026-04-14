@@ -61,6 +61,12 @@ const routes = [
         meta: { title: '机房详情', requiresAuth: true }
       },
       {
+        path: 'projects/:id',
+        name: 'ProjectDetail',
+        component: () => import('@/views/projects/ProjectDetail.vue'),
+        meta: { title: '项目详情', requiresAuth: true }
+      },
+      {
         path: 'tasks',
         name: 'TaskList',
         component: () => import('@/views/tasks/TaskList.vue'),

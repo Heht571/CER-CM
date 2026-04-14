@@ -68,7 +68,7 @@ const { isAdmin } = require('../middleware/authorize');
  *                         reuse:
  *                           type: integer
  */
-router.get('/overview', isAdmin, statisticsController.getOverview);
+router.get('/overview', statisticsController.getOverview);
 
 /**
  * @swagger
@@ -108,7 +108,7 @@ router.get('/overview', isAdmin, statisticsController.getOverview);
  *                       percentage:
  *                         type: integer
  */
-router.get('/phase', isAdmin, statisticsController.getByPhase);
+router.get('/phase', statisticsController.getByPhase);
 
 /**
  * @swagger
@@ -155,7 +155,7 @@ router.get('/phase', isAdmin, statisticsController.getByPhase);
  *                               phone:
  *                                 type: string
  */
-router.get('/delayed', isAdmin, statisticsController.getDelayed);
+router.get('/delayed', statisticsController.getDelayed);
 
 /**
  * @swagger
@@ -261,6 +261,56 @@ router.get('/ranking', isAdmin, statisticsController.getRoomRanking);
  *                             progress:
  *                               type: integer
  */
-router.get('/by-manager', isAdmin, statisticsController.getByManager);
+router.get('/by-manager', statisticsController.getByManager);
+
+/**
+ * @swagger
+ * /statistics/by-project:
+ *   get:
+ *     summary: 按项目分组统计
+ *     description: 获取每个项目的机房建设情况（用于总览卡片）
+ *     tags: [Statistics]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取项目统计
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       name:
+ *                         type: string
+ *                       code:
+ *                         type: string
+ *                       description:
+ *                         type: string
+ *                       stats:
+ *                         type: object
+ *                         properties:
+ *                           total:
+ *                             type: integer
+ *                           completed:
+ *                             type: integer
+ *                           inProgress:
+ *                             type: integer
+ *                           planning:
+ *                             type: integer
+ *                           paused:
+ *                             type: integer
+ *                       progress:
+ *                         type: integer
+ */
+router.get('/by-project', statisticsController.getByProject);
 
 module.exports = router;

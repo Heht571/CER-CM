@@ -59,3 +59,13 @@ export function downloadImportTemplate() {
 export function batchImportRooms(data) {
   return request.post('/rooms/import', { data })
 }
+
+// 获取机房变更历史
+export function getRoomChangeHistory(id) {
+  return request.get(`/rooms/${id}/change-history`)
+}
+
+// 批量删除机房
+export function batchDeleteRooms(ids) {
+  return request.post('/rooms/batch-delete', { ids })
+}

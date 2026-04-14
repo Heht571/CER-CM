@@ -6,6 +6,33 @@ const { isAdmin } = require('../middleware/authorize');
 
 /**
  * @swagger
+ * /rooms/batch-delete:
+ *   post:
+ *     summary: 批量删除机房
+ *     tags: [Rooms]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
+router.post('/batch-delete', isAdmin, roomController.batchRemove);
+
+/**
+ * @swagger
  * /rooms:
  *   get:
  *     summary: 获取机房列表
@@ -416,5 +443,25 @@ router.get('/template', roomController.downloadTemplate);
  *         description: 导入结果
  */
 router.post('/import', isAdmin, roomController.batchImport);
+
+/**
+ * @swagger
+ * /rooms/{id}/change-history:
+ *   get:
+ *     summary: 获取机房变更历史
+ *     tags: [Rooms]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: 成功获取变更历史
+ */
+router.get('/:id/change-history', roomController.getChangeHistory);
 
 module.exports = router;

@@ -1,4 +1,4 @@
-const { MachineRoom, RoomTask, ConstructionPhase, User, sequelize } = require('../models');
+const { MachineRoom, RoomTask, ConstructionPhase, User, Project, sequelize } = require('../models');
 const { success, fail } = require('../utils/response');
 const { Op } = require('sequelize');
 
@@ -56,10 +56,17 @@ const diffCalendarDays = (start, end) => {
  */
 const getOverview = async (req, res, next) => {
   try {
+    const { project_id } = req.query;
+
+    // 项目筛选条件
+    const projectWhere = project_id ? { project_id } : {};
+
     // 机房统计 - 使用原生SQL
     const roomStats = await sequelize.query(
-      `SELECT status, COUNT(*) as count FROM machine_rooms GROUP BY status`,
-      { type: sequelize.QueryTypes.SELECT }
+      `SELECT status, COUNT(*) as count FROM machine_rooms
+       ${project_id ? 'WHERE project_id = $1' : ''}
+       GROUP BY status`,
+      { bind: project_id ? [project_id] : [], type: sequelize.QueryTypes.SELECT }
     );
 
     const roomCounts = {
@@ -76,10 +83,13 @@ const getOverview = async (req, res, next) => {
       }
     });
 
-    // 任务统计 - 使用原生SQL
+    // 任务统计 - 需要通过 room_tasks 关联 machine_rooms 进行项目筛选
     const taskStats = await sequelize.query(
-      `SELECT status, COUNT(*) as count FROM room_tasks GROUP BY status`,
-      { type: sequelize.QueryTypes.SELECT }
+      `SELECT rt.status, COUNT(*) as count
+       FROM room_tasks rt
+       ${project_id ? 'JOIN machine_rooms mr ON rt.room_id = mr.id WHERE mr.project_id = $1' : ''}
+       GROUP BY rt.status`,
+      { bind: project_id ? [project_id] : [], type: sequelize.QueryTypes.SELECT }
     );
 
     const taskCounts = {
@@ -95,18 +105,23 @@ const getOverview = async (req, res, next) => {
       }
     });
 
+    // 总体进度
     const overallProgressResult = await sequelize.query(
-      `SELECT COALESCE(ROUND(AVG(progress)), 0) as progress FROM room_tasks`,
-      { type: sequelize.QueryTypes.SELECT }
+      `SELECT COALESCE(ROUND(AVG(rt.progress)), 0) as progress
+       FROM room_tasks rt
+       ${project_id ? 'JOIN machine_rooms mr ON rt.room_id = mr.id WHERE mr.project_id = $1' : ''}`,
+      { bind: project_id ? [project_id] : [], type: sequelize.QueryTypes.SELECT }
     );
     const overallProgress = parseInt(overallProgressResult[0]?.progress) || 0;
 
     // 延期任务统计
     const today = formatDateOnly(new Date());
     const delayedResult = await sequelize.query(
-      `SELECT COUNT(*) as count FROM room_tasks
-       WHERE status != 'completed' AND planned_end_date < $1 AND planned_end_date IS NOT NULL`,
-      { bind: [today], type: sequelize.QueryTypes.SELECT }
+      `SELECT COUNT(*) as count FROM room_tasks rt
+       ${project_id ? 'JOIN machine_rooms mr ON rt.room_id = mr.id' : ''}
+       WHERE rt.status != 'completed' AND rt.planned_end_date < $1 AND rt.planned_end_date IS NOT NULL
+       ${project_id ? 'AND mr.project_id = $2' : ''}`,
+      { bind: project_id ? [today, project_id] : [today], type: sequelize.QueryTypes.SELECT }
     );
     const delayedTasks = parseInt(delayedResult[0]?.count) || 0;
 
@@ -115,8 +130,10 @@ const getOverview = async (req, res, next) => {
 
     // 建设方式统计 - 使用原生SQL
     const constructionStats = await sequelize.query(
-      `SELECT construction_type, COUNT(*) as count FROM machine_rooms GROUP BY construction_type`,
-      { type: sequelize.QueryTypes.SELECT }
+      `SELECT construction_type, COUNT(*) as count FROM machine_rooms
+       ${project_id ? 'WHERE project_id = $1' : ''}
+       GROUP BY construction_type`,
+      { bind: project_id ? [project_id] : [], type: sequelize.QueryTypes.SELECT }
     );
 
     const constructionCounts = {
@@ -132,6 +149,13 @@ const getOverview = async (req, res, next) => {
       }
     });
 
+    // 获取活跃项目列表
+    const projects = await Project.findAll({
+      where: { status: 'active' },
+      attributes: ['id', 'name', 'code'],
+      order: [['name', 'ASC']]
+    });
+
     success(res, {
       rooms: roomCounts,
       tasks: {
@@ -140,7 +164,8 @@ const getOverview = async (req, res, next) => {
       },
       managers: totalManagers,
       overallProgress,
-      constructionTypes: constructionCounts
+      constructionTypes: constructionCounts,
+      projects
     });
   } catch (error) {
     next(error);
@@ -205,7 +230,14 @@ const getByPhase = async (req, res, next) => {
  */
 const getDelayed = async (req, res, next) => {
   try {
+    const { project_id } = req.query;
     const today = formatDateOnly(new Date());
+
+    // 构建机房筛选条件
+    const roomWhere = {};
+    if (project_id) {
+      roomWhere.project_id = project_id;
+    }
 
     const delayedTasks = await RoomTask.findAll({
       where: {
@@ -216,7 +248,8 @@ const getDelayed = async (req, res, next) => {
         {
           model: MachineRoom,
           as: 'room',
-          attributes: ['id', 'name', 'status'],
+          attributes: ['id', 'name', 'status', 'project_id'],
+          where: roomWhere,
           include: [{
             model: User,
             as: 'manager',
@@ -307,6 +340,11 @@ const getRoomRanking = async (req, res, next) => {
  */
 const getByManager = async (req, res, next) => {
   try {
+    const { project_id } = req.query;
+
+    // 项目筛选条件
+    const projectWhere = project_id ? { project_id } : {};
+
     // 获取所有启用的负责人
     const managers = await User.findAll({
       where: { role: 'manager', status: 1 },
@@ -315,14 +353,16 @@ const getByManager = async (req, res, next) => {
       raw: true
     });
 
-    // 获取每个机房的任务统计
+    // 获取每个机房的任务统计（考虑项目筛选）
     const taskStats = await sequelize.query(
-      `SELECT room_id, COUNT(*) as total,
-              SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-              COALESCE(ROUND(AVG(progress)), 0) as progress
-       FROM room_tasks
-       GROUP BY room_id`,
-      { type: sequelize.QueryTypes.SELECT }
+      `SELECT rt.room_id, COUNT(*) as total,
+              SUM(CASE WHEN rt.status = 'completed' THEN 1 ELSE 0 END) as completed,
+              COALESCE(ROUND(AVG(rt.progress)), 0) as progress
+       FROM room_tasks rt
+       JOIN machine_rooms mr ON rt.room_id = mr.id
+       ${project_id ? 'WHERE mr.project_id = $1' : ''}
+       GROUP BY rt.room_id`,
+      { bind: project_id ? [project_id] : [], type: sequelize.QueryTypes.SELECT }
     );
 
     // 构建机房统计映射
@@ -340,8 +380,10 @@ const getByManager = async (req, res, next) => {
       `SELECT rt.room_id, MAX(tpl.created_at) as last_update
        FROM task_progress_logs tpl
        JOIN room_tasks rt ON tpl.task_id = rt.id
+       JOIN machine_rooms mr ON rt.room_id = mr.id
+       ${project_id ? 'WHERE mr.project_id = $1' : ''}
        GROUP BY rt.room_id`,
-      { type: sequelize.QueryTypes.SELECT }
+      { bind: project_id ? [project_id] : [], type: sequelize.QueryTypes.SELECT }
     );
 
     const lastUpdateMap = {};
@@ -349,8 +391,9 @@ const getByManager = async (req, res, next) => {
       lastUpdateMap[stat.room_id] = stat.last_update;
     });
 
-    // 获取所有机房信息
+    // 获取所有机房信息（考虑项目筛选）
     const rooms = await MachineRoom.findAll({
+      where: projectWhere,
       attributes: ['id', 'name', 'code', 'status', 'manager_id', 'updated_at'],
       order: [['manager_id', 'ASC'], ['name', 'ASC']],
       raw: true
@@ -476,10 +519,94 @@ const getByManager = async (req, res, next) => {
   }
 };
 
+/**
+ * 获取所有项目统计（用于总览卡片）
+ */
+const getByProject = async (req, res, next) => {
+  try {
+    // 获取所有活跃项目
+    const projects = await Project.findAll({
+      where: { status: 'active' },
+      attributes: ['id', 'name', 'code', 'description'],
+      order: [['created_at', 'DESC']],
+      raw: true
+    });
+
+    // 获取每个项目的机房统计
+    const roomStats = await sequelize.query(
+      `SELECT project_id, COUNT(*) as total,
+              SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+              SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as "inProgress",
+              SUM(CASE WHEN status = 'planning' THEN 1 ELSE 0 END) as planning,
+              SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) as paused
+       FROM machine_rooms
+       WHERE project_id IS NOT NULL
+       GROUP BY project_id`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+
+    // 构建项目统计映射
+    const projectStatsMap = {};
+    roomStats.forEach(stat => {
+      projectStatsMap[stat.project_id] = {
+        total: parseInt(stat.total) || 0,
+        completed: parseInt(stat.completed) || 0,
+        inProgress: parseInt(stat.inProgress) || 0,
+        planning: parseInt(stat.planning) || 0,
+        paused: parseInt(stat.paused) || 0
+      };
+    });
+
+    // 获取每个项目的任务进度
+    const taskProgress = await sequelize.query(
+      `SELECT mr.project_id, COALESCE(ROUND(AVG(rt.progress)), 0) as progress
+       FROM room_tasks rt
+       JOIN machine_rooms mr ON rt.room_id = mr.id
+       WHERE mr.project_id IS NOT NULL
+       GROUP BY mr.project_id`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+
+    const progressMap = {};
+    taskProgress.forEach(stat => {
+      progressMap[stat.project_id] = parseInt(stat.progress) || 0;
+    });
+
+    // 获取未分配项目的机房统计
+    const unassignedStats = await sequelize.query(
+      `SELECT COUNT(*) as total,
+              SUM(CASE WHEN mr.status = 'completed' THEN 1 ELSE 0 END) as completed,
+              SUM(CASE WHEN mr.status = 'in_progress' THEN 1 ELSE 0 END) as "inProgress",
+              SUM(CASE WHEN mr.status = 'planning' THEN 1 ELSE 0 END) as planning,
+              SUM(CASE WHEN mr.status = 'paused' THEN 1 ELSE 0 END) as paused,
+              COALESCE(ROUND(AVG(rt.progress)), 0) as progress
+       FROM machine_rooms mr
+       LEFT JOIN room_tasks rt ON rt.room_id = mr.id
+       WHERE mr.project_id IS NULL`,
+      { type: sequelize.QueryTypes.SELECT }
+    );
+
+    // 构建结果
+    const result = projects.map(project => ({
+      id: project.id,
+      name: project.name,
+      code: project.code,
+      description: project.description,
+      stats: projectStatsMap[project.id] || { total: 0, completed: 0, inProgress: 0, planning: 0, paused: 0 },
+      progress: progressMap[project.id] || 0
+    }));
+
+    success(res, result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getOverview,
   getByPhase,
   getDelayed,
   getRoomRanking,
-  getByManager
+  getByManager,
+  getByProject
 };

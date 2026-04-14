@@ -280,16 +280,28 @@ const getServiceStatus = async (req, res, next) => {
  */
 const getRecipients = async (req, res, next) => {
   try {
-    const users = await User.findAll({
-      where: { status: 1 },
+    // 获取负责人列表
+    const managers = await User.findAll({
+      where: { status: 1, role: 'manager' },
       attributes: ['id', 'real_name', 'email', 'department'],
       order: [['real_name', 'ASC']]
     });
 
+    // 获取所有启用用户
+    const users = await User.findAll({
+      where: { status: 1 },
+      attributes: ['id', 'real_name', 'email', 'department', 'role'],
+      order: [['real_name', 'ASC']]
+    });
+
     // 只返回有邮箱的用户
+    const validManagers = managers.filter(u => u.email);
     const validUsers = users.filter(u => u.email);
 
-    success(res, validUsers);
+    success(res, {
+      managers: validManagers,
+      users: validUsers
+    });
   } catch (error) {
     next(error);
   }

@@ -5,6 +5,7 @@
       <div slot="header" class="card-header">
         <span>{{ room.name }}</span>
         <div>
+          <el-button v-if="isAdmin" type="info" size="small" @click="showChangeHistory">变更记录</el-button>
           <el-button v-if="isAdmin" type="primary" size="small" @click="showAssignDialog">分配负责人</el-button>
           <el-button v-if="isAdmin" type="warning" size="small" @click="showStatusDialog">更新状态</el-button>
         </div>
@@ -20,6 +21,7 @@
         </el-descriptions-item>
         <el-descriptions-item label="负责人">{{ room.manager?.real_name || '未分配' }}</el-descriptions-item>
         <el-descriptions-item label="联系电话">{{ room.manager?.phone || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="所属项目">{{ room.project?.name || '未分配' }}</el-descriptions-item>
         <el-descriptions-item label="项目开始日期">{{ room.planned_start_date || '-' }}</el-descriptions-item>
         <el-descriptions-item label="预计结束日期">{{ room.planned_end_date || '-' }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ formatDate(room.created_at) }}</el-descriptions-item>
@@ -241,11 +243,48 @@
         <el-button type="primary" @click="handleTaskUpdate">确定</el-button>
       </div>
     </el-dialog>
+
+    <!-- 变更历史对话框 -->
+    <el-dialog title="变更记录" :visible.sync="changeHistoryVisible" width="600px">
+      <el-table :data="changeHistory" v-loading="changeHistoryLoading" size="small">
+        <el-table-column label="变更类型" width="120">
+          <template slot-scope="scope">
+            <el-tag size="small">{{ scope.row.changeTypeText }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="原值" width="150">
+          <template slot-scope="scope">
+            {{ scope.row.oldValue || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="新值" width="150">
+          <template slot-scope="scope">
+            {{ scope.row.newValue || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="变更原因">
+          <template slot-scope="scope">
+            {{ scope.row.changeReason || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作人" width="100">
+          <template slot-scope="scope">
+            {{ scope.row.changer?.real_name || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="时间" width="140">
+          <template slot-scope="scope">
+            {{ formatDateTime(scope.row.createdAt) }}
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty v-if="changeHistory.length === 0 && !changeHistoryLoading" description="暂无变更记录"></el-empty>
+    </el-dialog>
   </div>
 </template>
 
 <script>
-import { getRoomDetail, getRoomTasks, getRoomProgress, assignManager, updateRoomStatus, getRoomLogs } from '@/api/room'
+import { getRoomDetail, getRoomTasks, getRoomProgress, assignManager, updateRoomStatus, getRoomLogs, getRoomChangeHistory } from '@/api/room'
 import { updateTask } from '@/api/task'
 import { getManagers } from '@/api/user'
 import { mapGetters } from 'vuex'
@@ -279,6 +318,9 @@ export default {
       assignDialogVisible: false,
       statusDialogVisible: false,
       taskDialogVisible: false,
+      changeHistoryVisible: false,
+      changeHistory: [],
+      changeHistoryLoading: false,
       selectedManagerId: null,
       selectedStatus: null,
       currentTask: null,
@@ -410,6 +452,19 @@ export default {
         if (error !== 'cancel') {
           console.error(error)
         }
+      }
+    },
+    async showChangeHistory() {
+      this.changeHistoryVisible = true
+      this.changeHistoryLoading = true
+      try {
+        const res = await getRoomChangeHistory(this.roomId)
+        this.changeHistory = res.data
+      } catch (error) {
+        console.error(error)
+        this.$message.error('获取变更记录失败')
+      } finally {
+        this.changeHistoryLoading = false
       }
     },
     showTaskDialog(task) {

@@ -40,6 +40,9 @@
           <el-button type="primary" @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
           <el-button v-if="!isMobile" type="info" @click="handleExport">导出</el-button>
+          <el-button v-if="isAdmin && !isMobile && selectedRows.length > 0" type="danger" @click="handleBatchDelete">
+            批量删除 ({{ selectedRows.length }})
+          </el-button>
           <el-button v-if="isAdmin && !isMobile" type="warning" @click="showImportDialog">批量导入</el-button>
           <el-button v-if="isAdmin && !isMobile" type="success" @click="goToCreate">新建机房</el-button>
         </el-form-item>
@@ -96,7 +99,8 @@
         </div>
       </div>
       <!-- PC端表格 -->
-      <el-table v-else :data="rooms" v-loading="loading" style="width: 100%">
+      <el-table v-else :data="rooms" v-loading="loading" style="width: 100%" @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="50" v-if="isAdmin"></el-table-column>
         <el-table-column prop="code" label="机房编码" width="120"></el-table-column>
         <el-table-column prop="name" label="机房名称"></el-table-column>
         <el-table-column label="建设方式" width="120">
@@ -215,7 +219,7 @@
 </template>
 
 <script>
-import { getRooms, deleteRoom, downloadImportTemplate, batchImportRooms } from '@/api/room'
+import { getRooms, deleteRoom, downloadImportTemplate, batchImportRooms, batchDeleteRooms } from '@/api/room'
 import { getManagers } from '@/api/user'
 import { mapGetters } from 'vuex'
 import {
@@ -240,6 +244,7 @@ export default {
       total: 0,
       page: 1,
       pageSize: 10,
+      selectedRows: [],
       searchForm: {
         keyword: '',
         status: '',
@@ -333,6 +338,34 @@ export default {
         })
         await deleteRoom(row.id)
         this.$message.success('删除成功')
+        this.loadRooms()
+      } catch (error) {
+        if (error !== 'cancel') {
+          console.error(error)
+        }
+      }
+    },
+    handleSelectionChange(rows) {
+      this.selectedRows = rows
+    },
+    async handleBatchDelete() {
+      if (this.selectedRows.length === 0) {
+        this.$message.warning('请先选择要删除的机房')
+        return
+      }
+
+      const names = this.selectedRows.map(r => r.name).join('、')
+      try {
+        await this.$confirm(`确定要删除以下 ${this.selectedRows.length} 个机房吗？\n${names}`, '批量删除确认', {
+          type: 'warning',
+          confirmButtonText: '确定删除',
+          cancelButtonText: '取消'
+        })
+
+        const ids = this.selectedRows.map(r => r.id)
+        await batchDeleteRooms(ids)
+        this.$message.success(`成功删除 ${ids.length} 个机房`)
+        this.selectedRows = []
         this.loadRooms()
       } catch (error) {
         if (error !== 'cancel') {

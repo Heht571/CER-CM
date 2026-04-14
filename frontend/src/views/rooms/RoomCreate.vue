@@ -38,6 +38,16 @@
             ></el-option>
           </el-select>
         </el-form-item>
+        <el-form-item label="所属项目">
+          <el-select v-model="form.project_id" placeholder="请选择所属项目" clearable>
+            <el-option
+              v-for="project in projects"
+              :key="project.id"
+              :label="project.name"
+              :value="project.id"
+            ></el-option>
+          </el-select>
+        </el-form-item>
         <el-form-item label="项目开始日期" prop="planned_start_date">
           <el-date-picker
             v-model="form.planned_start_date"
@@ -160,6 +170,7 @@
 <script>
 import { createRoom } from '@/api/room'
 import { getManagers } from '@/api/user'
+import { getActiveProjects } from '@/api/project'
 import { getConstructionTypeDesc } from '@/utils'
 
 export default {
@@ -168,11 +179,13 @@ export default {
     return {
       loading: false,
       managers: [],
+      projects: [],
       form: {
         name: '',
         code: '',
         location: '',
         manager_id: null,
+        project_id: null,
         planned_start_date: null,
         construction_type: 'purchase',
         description: ''
@@ -203,12 +216,21 @@ export default {
   },
   created() {
     this.loadManagers()
+    this.loadProjects()
   },
   methods: {
     async loadManagers() {
       try {
         const res = await getManagers()
         this.managers = res.data
+      } catch (error) {
+        console.error(error)
+      }
+    },
+    async loadProjects() {
+      try {
+        const res = await getActiveProjects()
+        this.projects = res.data
       } catch (error) {
         console.error(error)
       }
