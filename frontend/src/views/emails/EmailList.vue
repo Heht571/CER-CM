@@ -1,112 +1,123 @@
 <template>
-  <div class="email-list">
-    <el-card>
-      <div slot="header">
-        <span>邮件任务管理</span>
-        <div style="float: right;">
-          <el-tag :type="serviceStatus.connected ? 'success' : 'danger'" size="small">
-            {{ serviceStatus.connected ? '服务正常' : '服务异常' }}
-          </el-tag>
-          <el-button size="small" style="margin-left: 10px;" @click="goToSettings">邮件设置</el-button>
-          <el-button type="primary" size="small" style="margin-left: 10px;" @click="goToCreate">新建邮件</el-button>
+  <div class="email-list-page">
+    <!-- Hero 区 - 深色背景 -->
+    <section class="hero-section">
+      <div class="hero-content">
+        <h1 class="hero-title">邮件管理</h1>
+        <p class="hero-subtitle">管理邮件任务，调度发送计划</p>
+      </div>
+      <div class="hero-actions">
+        <el-tag :type="serviceStatus.connected ? 'success' : 'danger'" size="small">
+          {{ serviceStatus.connected ? '服务正常' : '服务异常' }}
+        </el-tag>
+        <el-button type="primary" class="hero-btn" @click="goToCreate">新建邮件</el-button>
+      </div>
+    </section>
+
+    <!-- 搜索栏 -->
+    <section class="search-section">
+      <div class="search-bar">
+        <el-select
+          v-model="searchForm.status"
+          placeholder="全部状态"
+          clearable
+          style="width: 140px;"
+          @change="handleSearch"
+        >
+          <el-option label="草稿" value="draft"></el-option>
+          <el-option label="已调度" value="scheduled"></el-option>
+          <el-option label="发送中" value="sending"></el-option>
+          <el-option label="已发送" value="sent"></el-option>
+          <el-option label="发送失败" value="failed"></el-option>
+        </el-select>
+        <el-input
+          v-model="searchForm.keyword"
+          placeholder="搜索主题"
+          clearable
+          style="width: 200px;"
+          @keyup.enter.native="handleSearch"
+        ></el-input>
+        <el-button type="primary" @click="handleSearch">搜索</el-button>
+        <el-button @click="handleReset">重置</el-button>
+        <el-button type="text" @click="goToSettings">邮件设置</el-button>
+      </div>
+    </section>
+
+    <!-- 邮件列表 -->
+    <section class="list-section" v-loading="loading">
+      <el-empty v-if="emails.length === 0 && !loading" description="暂无邮件任务"></el-empty>
+
+      <div class="email-list">
+        <div v-for="email in emails" :key="email.id" class="email-card">
+          <div class="email-header">
+            <div class="email-subject">{{ email.subject }}</div>
+            <el-tag size="small" :type="statusType(email.status)">
+              {{ statusText(email.status) }}
+            </el-tag>
+          </div>
+
+          <div class="email-meta">
+            <div class="meta-item">
+              <span class="meta-label">接收人</span>
+              <span class="meta-value">{{ email.recipients?.length || 0 }} 人</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">计划时间</span>
+              <span class="meta-value">{{ formatTime(email.scheduled_time) }}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">重复</span>
+              <el-tag v-if="email.repeat_type === 'none'" type="info" size="mini">单次</el-tag>
+              <el-tag v-else type="warning" size="mini">{{ repeatText(email.repeat_type) }}</el-tag>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">发送次数</span>
+              <span class="meta-value">{{ email.sent_count || 0 }}</span>
+            </div>
+          </div>
+
+          <div class="email-footer">
+            <span class="creator">{{ email.creator?.real_name || '-' }}</span>
+            <div class="email-actions">
+              <el-button type="text" size="small" @click="goToDetail(email.id)">详情</el-button>
+              <el-button
+                v-if="email.status === 'draft' || email.status === 'scheduled'"
+                type="text"
+                size="small"
+                @click="goToEdit(email.id)"
+              >编辑</el-button>
+              <el-button
+                v-if="email.status === 'draft' || email.status === 'scheduled'"
+                type="primary"
+                size="mini"
+                @click="handleSendNow(email)"
+              >发送</el-button>
+              <el-button
+                v-if="email.status !== 'sending'"
+                type="text"
+                size="small"
+                class="danger"
+                @click="handleDelete(email)"
+              >删除</el-button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- 搜索 -->
-      <el-form :inline="true" :model="searchForm" style="margin-bottom: 20px;">
-        <el-form-item label="状态">
-          <el-select v-model="searchForm.status" placeholder="全部" clearable>
-            <el-option label="草稿" value="draft"></el-option>
-            <el-option label="已调度" value="scheduled"></el-option>
-            <el-option label="发送中" value="sending"></el-option>
-            <el-option label="已发送" value="sent"></el-option>
-            <el-option label="发送失败" value="failed"></el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item label="主题">
-          <el-input v-model="searchForm.keyword" placeholder="搜索主题" clearable></el-input>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
-        </el-form-item>
-      </el-form>
-
-      <!-- 邮件列表 -->
-      <el-table :data="emails" v-loading="loading">
-        <el-table-column prop="subject" label="主题" min-width="200"></el-table-column>
-        <el-table-column label="接收人" min-width="150">
-          <template slot-scope="scope">
-            <span v-if="scope.row.recipients && scope.row.recipients.length">
-              {{ scope.row.recipients.length }} 人
-            </span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="计划发送时间" width="160">
-          <template slot-scope="scope">
-            {{ formatTime(scope.row.scheduled_time) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="重复" width="80">
-          <template slot-scope="scope">
-            <el-tag v-if="scope.row.repeat_type === 'none'" type="info" size="small">单次</el-tag>
-            <el-tag v-else type="warning" size="small">{{ repeatText(scope.row.repeat_type) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="100">
-          <template slot-scope="scope">
-            <el-tag :type="statusType(scope.row.status)" size="small">
-              {{ statusText(scope.row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="发送次数" width="80">
-          <template slot-scope="scope">
-            {{ scope.row.sent_count || 0 }}
-          </template>
-        </el-table-column>
-        <el-table-column label="创建人" width="100">
-          <template slot-scope="scope">
-            {{ scope.row.creator ? scope.row.creator.real_name : '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="220">
-          <template slot-scope="scope">
-            <el-button type="text" @click="goToDetail(scope.row.id)">详情</el-button>
-            <el-button
-              v-if="scope.row.status === 'draft' || scope.row.status === 'scheduled'"
-              type="text"
-              @click="goToEdit(scope.row.id)"
-            >编辑</el-button>
-            <el-button
-              v-if="scope.row.status === 'draft' || scope.row.status === 'scheduled'"
-              type="text"
-              @click="handleSendNow(scope.row)"
-            >发送</el-button>
-            <el-button
-              v-if="scope.row.status !== 'sending'"
-              type="text"
-              class="danger"
-              @click="handleDelete(scope.row)"
-            >删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-
       <!-- 分页 -->
-      <el-pagination
-        style="margin-top: 20px; text-align: right;"
-        background
-        layout="total, sizes, prev, pager, next"
-        :total="total"
-        :page-size="pageSize"
-        :current-page="page"
-        :page-sizes="[10, 20, 50]"
-        @current-change="handlePageChange"
-        @size-change="handleSizeChange"
-      ></el-pagination>
-    </el-card>
+      <div class="pagination-wrapper">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="total"
+          :page-size="pageSize"
+          :current-page="page"
+          :page-sizes="[10, 20, 50]"
+          @current-change="handlePageChange"
+          @size-change="handleSizeChange"
+        ></el-pagination>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -257,7 +268,233 @@ export default {
 </script>
 
 <style scoped>
+.email-list-page {
+  min-height: 100%;
+}
+
+/* Hero 区 - 深色背景卡片 */
+.hero-section {
+  background: #000000;
+  padding: 48px 32px;
+  margin: 0 0 24px 0;
+  border-radius: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hero-content {
+  flex: 1;
+}
+
+.hero-title {
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 48px;
+  font-weight: 600;
+  letter-spacing: -0.28px;
+  line-height: 1.08;
+  color: #ffffff;
+  margin: 0 0 8px 0;
+}
+
+.hero-subtitle {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 21px;
+  font-weight: 400;
+  letter-spacing: 0.231px;
+  line-height: 1.19;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.hero-btn {
+  border-radius: 980px;
+}
+
+/* 搜索区 */
+.search-section {
+  background: #f5f5f7;
+  padding: 16px 24px;
+}
+
+.search-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* 列表区 */
+.list-section {
+  background: #f5f5f7;
+  padding: 24px;
+}
+
+.email-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 邮件卡片 - Apple 无边框风格 */
+.email-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+
+.email-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.email-subject {
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: 0.231px;
+  line-height: 1.19;
+  color: #1d1d1f;
+  flex: 1;
+}
+
+.email-meta {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meta-label {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
+}
+
+.meta-value {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 17px;
+  letter-spacing: -0.374px;
+  color: #1d1d1f;
+}
+
+.email-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16px;
+}
+
+.creator {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
+}
+
+.email-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .danger {
-  color: #f56c6c;
+  color: #ff3b30;
+}
+
+.pagination-wrapper {
+  display: flex;
+  justify-content: center;
+  padding-top: 24px;
+}
+
+/* 移动端适配 */
+@media screen and (max-width: 768px) {
+  .hero-section {
+    flex-direction: column;
+    text-align: center;
+    padding: 32px 16px;
+    gap: 24px;
+  }
+
+  .hero-title {
+    font-size: 32px;
+    letter-spacing: -0.28px;
+    line-height: 1.14;
+  }
+
+  .hero-subtitle {
+    font-size: 17px;
+    letter-spacing: -0.374px;
+    line-height: 1.47;
+  }
+
+  .hero-actions {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .search-section {
+    padding: 12px 16px;
+  }
+
+  .search-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .search-bar .el-input,
+  .search-bar .el-select {
+    width: 100%;
+  }
+
+  .list-section {
+    padding: 16px;
+  }
+
+  .email-card {
+    padding: 16px;
+  }
+
+  .email-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .email-subject {
+    font-size: 17px;
+    letter-spacing: -0.374px;
+  }
+
+  .email-meta {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .email-footer {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .email-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 }
 </style>

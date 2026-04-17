@@ -1,187 +1,189 @@
 <template>
-  <div class="room-detail">
-    <!-- 机房基本信息 -->
-    <el-card class="info-card">
-      <div slot="header" class="card-header">
-        <span>{{ room.name }}</span>
-        <div>
-          <el-button v-if="isAdmin" type="info" size="small" @click="showChangeHistory">变更记录</el-button>
-          <el-button v-if="isAdmin" type="primary" size="small" @click="showAssignDialog">分配负责人</el-button>
-          <el-button v-if="isAdmin" type="warning" size="small" @click="showStatusDialog">更新状态</el-button>
+  <div class="room-detail-page">
+    <!-- Hero 区 - 深色背景 -->
+    <section class="hero-section">
+      <div class="hero-content">
+        <h1 class="hero-title">{{ room.name }}</h1>
+        <p class="hero-subtitle" v-if="room.code">{{ room.code }}</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-item">
+          <div class="stat-value">{{ progress.overall || 0 }}%</div>
+          <div class="stat-label">进度</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">{{ progress.completedTasks }}/{{ progress.totalTasks }}</div>
+          <div class="stat-label">任务</div>
         </div>
       </div>
-      <el-descriptions :column="3" border>
-        <el-descriptions-item label="机房编码">{{ room.code || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="地理位置">{{ room.location || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="状态">
-          <el-tag :type="getStatusType(room.status)">{{ getStatusText(room.status) }}</el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="建设方式">
-          <el-tag type="info">{{ getConstructionTypeText(room.construction_type) }}</el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="负责人">{{ room.manager?.real_name || '未分配' }}</el-descriptions-item>
-        <el-descriptions-item label="联系电话">{{ room.manager?.phone || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="所属项目">{{ room.project?.name || '未分配' }}</el-descriptions-item>
-        <el-descriptions-item label="项目开始日期">{{ room.planned_start_date || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="预计结束日期">{{ room.planned_end_date || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ formatDate(room.created_at) }}</el-descriptions-item>
-      </el-descriptions>
-    </el-card>
+      <el-tag :type="getStatusType(room.status)" size="large">
+        {{ getStatusText(room.status) }}
+      </el-tag>
+    </section>
 
-    <!-- 进度概览 -->
-    <el-card class="progress-card">
-      <div slot="header">建设进度</div>
-      <div class="progress-overview">
-        <el-progress type="circle" :percentage="progress.overall || 0" :width="120"></el-progress>
-        <div class="progress-text">
-          <p>总进度: {{ progress.overall }}%</p>
-          <p>已完成: {{ progress.completedTasks }} / {{ progress.totalTasks }} 个任务</p>
-          <p>进行中: {{ progress.inProgressTasks }} 个任务</p>
+    <!-- 操作区 -->
+    <section class="action-section" v-if="isAdmin">
+      <div class="action-bar">
+        <el-button type="primary" class="action-btn" @click="showAssignDialog">分配负责人</el-button>
+        <el-button type="warning" class="action-btn" @click="showStatusDialog">更新状态</el-button>
+        <el-button class="action-btn" @click="showChangeHistory">变更记录</el-button>
+      </div>
+    </section>
+
+    <!-- 基本信息 -->
+    <section class="info-section">
+      <div class="info-card">
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">地理位置</div>
+            <div class="info-value">{{ room.location || '-' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">建设方式</div>
+            <div class="info-value">{{ getConstructionTypeText(room.construction_type) }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">负责人</div>
+            <div class="info-value">{{ room.manager?.real_name || '未分配' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">联系电话</div>
+            <div class="info-value">{{ room.manager?.phone || '-' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">所属项目</div>
+            <div class="info-value">{{ room.project?.name || '未分配' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">计划工期</div>
+            <div class="info-value">{{ formatDate(room.planned_start_date) }} ~ {{ formatDate(room.planned_end_date) }}</div>
+          </div>
         </div>
       </div>
-      <!-- 耗时统计 -->
-      <el-divider></el-divider>
-      <div class="time-stats">
-        <div class="stat-item">
-          <span class="label">项目开始日期：</span>
-          <span class="value">{{ formatDate(room.planned_start_date) }}</span>
+    </section>
+
+    <!-- 时间统计 -->
+    <section class="time-section">
+      <div class="time-grid">
+        <div class="time-item">
+          <div class="time-label">预计总工期</div>
+          <div class="time-value">{{ calculateTotalDays() }} 天</div>
         </div>
-        <div class="stat-item">
-          <span class="label">预计结束日期：</span>
-          <span class="value">{{ formatDate(room.planned_end_date) }}</span>
+        <div class="time-item">
+          <div class="time-label">已用时间</div>
+          <div class="time-value">{{ calculateElapsedDays() }} 天</div>
         </div>
-        <div class="stat-item">
-          <span class="label">预计总工期：</span>
-          <span class="value">{{ calculateTotalDays() }} 天</span>
+        <div class="time-item">
+          <div class="time-label">剩余时间</div>
+          <div class="time-value" :class="{ danger: isOverdue() }">{{ calculateRemainingDays() }} 天</div>
         </div>
-        <div class="stat-item">
-          <span class="label">已用时间：</span>
-          <span class="value">{{ calculateElapsedDays() }} 天</span>
-        </div>
-        <div class="stat-item">
-          <span class="label">剩余时间：</span>
-          <span class="value" :class="{ 'text-danger': isOverdue() }">{{ calculateRemainingDays() }} 天</span>
-        </div>
-        <div class="stat-item" v-if="isOverdue()">
-          <span class="label text-danger">延期天数：</span>
-          <span class="value text-danger">{{ calculateOverdueDays() }} 天</span>
+        <div class="time-item" v-if="isOverdue()">
+          <div class="time-label danger">延期天数</div>
+          <div class="time-value danger">{{ calculateOverdueDays() }} 天</div>
         </div>
       </div>
-      <!-- 进度对比 -->
-      <el-divider></el-divider>
+    </section>
+
+    <!-- 进度对比 -->
+    <section class="progress-section">
+      <div class="progress-header">
+        <h2 class="section-title">进度分析</h2>
+      </div>
       <div class="progress-comparison">
-        <div class="comparison-item">
-          <span class="label">计划进度：</span>
-          <el-progress :percentage="calculatePlannedProgress()" :show-text="false" color="#909399"></el-progress>
-          <span class="percent">{{ calculatePlannedProgress() }}%</span>
+        <div class="comparison-row">
+          <span class="comparison-label">计划进度</span>
+          <div class="comparison-bar">
+            <div class="bar-fill gray" :style="{ width: calculatePlannedProgress() + '%' }"></div>
+          </div>
+          <span class="comparison-num">{{ calculatePlannedProgress() }}%</span>
         </div>
-        <div class="comparison-item">
-          <span class="label">实际进度：</span>
-          <el-progress :percentage="progress.overall || 0" :show-text="false"></el-progress>
-          <span class="percent" :class="{ 'text-danger': progress.overall < calculatePlannedProgress() }">{{ progress.overall || 0 }}%</span>
+        <div class="comparison-row">
+          <span class="comparison-label">实际进度</span>
+          <div class="comparison-bar">
+            <div class="bar-fill accent" :style="{ width: (progress.overall || 0) + '%' }"></div>
+          </div>
+          <span class="comparison-num" :class="{ danger: progress.overall < calculatePlannedProgress() }">{{ progress.overall || 0 }}%</span>
         </div>
-        <div class="comparison-item">
-          <span class="label">进度偏差：</span>
+        <div class="deviation-row">
+          <span class="deviation-label">进度偏差</span>
           <span :class="getDeviationClass()">{{ getDeviationText() }}</span>
         </div>
       </div>
-    </el-card>
+    </section>
 
     <!-- 网络流程图 -->
-    <el-card style="margin-top: 20px;">
-      <div slot="header">建设流程网络图</div>
-      <div class="graph-legend">
-        <span class="legend-item"><span class="legend-color not-started"></span> 未开始</span>
-        <span class="legend-item"><span class="legend-color in-progress"></span> 进行中</span>
-        <span class="legend-item"><span class="legend-color completed"></span> 已完成</span>
+    <section class="graph-section">
+      <div class="section-header">
+        <h2 class="section-title">建设流程</h2>
+        <div class="graph-legend">
+          <span class="legend-item"><span class="legend-dot not-started"></span> 未开始</span>
+          <span class="legend-item"><span class="legend-dot in-progress"></span> 进行中</span>
+          <span class="legend-item"><span class="legend-dot completed"></span> 已完成</span>
+        </div>
       </div>
-      <NetworkGraph
-        v-if="graphData.nodes.length"
-        :nodes="graphData.nodes"
-        :edges="graphData.edges"
-        @node-click="showTaskDialog"
-      />
-      <el-empty v-else description="暂无任务数据"></el-empty>
-    </el-card>
+      <div class="graph-container">
+        <NetworkGraph
+          v-if="graphData.nodes.length"
+          :nodes="graphData.nodes"
+          :edges="graphData.edges"
+          @node-click="showTaskDialog"
+        />
+        <el-empty v-else description="暂无任务数据"></el-empty>
+      </div>
+    </section>
 
     <!-- 任务列表 -->
-    <el-card style="margin-top: 20px;">
-      <div slot="header">任务列表</div>
-      <el-table :data="taskList" size="small">
-        <el-table-column type="index" label="序号" width="60"></el-table-column>
-        <el-table-column prop="name" label="任务名称"></el-table-column>
-        <el-table-column label="计划开始日期" width="120">
-          <template slot-scope="scope">
-            {{ formatDate(scope.row.planned_start_date) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="计划结束日期" width="120">
-          <template slot-scope="scope">
-            {{ formatDate(scope.row.planned_end_date) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="planned_days" label="持续天数" width="100">
-          <template slot-scope="scope">
-            {{ scope.row.planned_days || 0 }} 天
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="100">
-          <template slot-scope="scope">
-            <el-tag :type="getTaskStatusType(scope.row.status)" size="small">
-              {{ getTaskStatusText(scope.row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="进度" width="120">
-          <template slot-scope="scope">
-            <el-progress :percentage="scope.row.progress" :show-text="false"></el-progress>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="100">
-          <template slot-scope="scope">
-            <el-button type="text" :disabled="isTaskEditingLocked" @click="showTaskDialog(scope.row)">更新</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+    <section class="tasks-section">
+      <div class="section-header">
+        <h2 class="section-title">任务列表</h2>
+      </div>
+      <div class="task-list">
+        <div v-for="task in taskList" :key="task.id" class="task-card">
+          <div class="task-left">
+            <div class="task-name">{{ task.name }}</div>
+            <div class="task-date">{{ formatDate(task.planned_start_date) }} ~ {{ formatDate(task.planned_end_date) }}</div>
+          </div>
+          <div class="task-center">
+            <el-tag :type="getTaskStatusType(task.status)" size="small">{{ getTaskStatusText(task.status) }}</el-tag>
+          </div>
+          <div class="task-right">
+            <span class="task-progress">{{ task.progress }}%</span>
+            <el-button type="text" size="small" :disabled="isTaskEditingLocked" @click="showTaskDialog(task)">更新</el-button>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- 更新日志 -->
-    <el-card style="margin-top: 20px;">
-      <div slot="header">更新日志</div>
-      <el-table :data="logs" v-loading="logsLoading" size="small">
-        <el-table-column label="时间" width="160">
-          <template slot-scope="scope">
-            {{ formatDateTime(scope.row.created_at) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="task_name" label="任务" width="140"></el-table-column>
-        <el-table-column label="操作人" width="100">
-          <template slot-scope="scope">
-            {{ scope.row.user?.real_name || scope.row.user?.username || '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="更新内容">
-          <template slot-scope="scope">
-            {{ getLogContent(scope.row) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="remark" label="备注">
-          <template slot-scope="scope">
-            {{ scope.row.remark || '-' }}
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-pagination
-        v-if="logsPagination.total > 0"
-        style="margin-top: 15px; text-align: right;"
-        background
-        layout="total, prev, pager, next"
-        :total="logsPagination.total"
-        :page-size="logsPagination.pageSize"
-        :current-page="logsPagination.page"
-        @current-change="handleLogPageChange"
-      ></el-pagination>
-    </el-card>
+    <section class="logs-section">
+      <div class="section-header">
+        <h2 class="section-title">更新日志</h2>
+      </div>
+      <div class="logs-list" v-loading="logsLoading">
+        <div v-for="log in logs" :key="log.id" class="log-card">
+          <div class="log-header">
+            <span class="log-time">{{ formatDateTime(log.created_at) }}</span>
+            <span class="log-user">{{ log.user?.real_name || log.user?.username || '-' }}</span>
+          </div>
+          <div class="log-content">
+            <span class="log-task">{{ log.task_name }}</span>
+            <span class="log-action">{{ getLogContent(log) }}</span>
+          </div>
+          <div class="log-remark" v-if="log.remark">{{ log.remark }}</div>
+        </div>
+        <el-empty v-if="logs.length === 0 && !logsLoading" description="暂无更新日志"></el-empty>
+      </div>
+      <div class="pagination-wrapper" v-if="logsPagination.total > 0">
+        <el-pagination
+          background
+          layout="total, prev, pager, next"
+          :total="logsPagination.total"
+          :page-size="logsPagination.pageSize"
+          :current-page="logsPagination.page"
+          @current-change="handleLogPageChange"
+        ></el-pagination>
+      </div>
+    </section>
 
     <!-- 分配负责人对话框 -->
     <el-dialog title="分配负责人" :visible.sync="assignDialogVisible" width="400px">
@@ -217,8 +219,8 @@
     </el-dialog>
 
     <!-- 更新任务对话框 -->
-    <el-dialog title="更新任务进度" :visible.sync="taskDialogVisible" width="500px">
-      <el-form :model="taskForm" label-width="100px">
+    <el-dialog title="更新任务进度" :visible.sync="taskDialogVisible" width="420px">
+      <el-form :model="taskForm" label-width="80px">
         <el-form-item label="任务名称">
           <span>{{ currentTask?.name }}</span>
         </el-form-item>
@@ -229,13 +231,11 @@
           <el-slider v-model="taskForm.progress" :min="0" :max="100" show-input></el-slider>
         </el-form-item>
         <el-form-item label="状态">
-          <el-tag :type="getAutoStatusType()" size="small">
-            {{ getAutoStatusText() }}
-          </el-tag>
+          <el-tag :type="getAutoStatusType()" size="small">{{ getAutoStatusText() }}</el-tag>
           <span class="status-hint">（根据进度自动计算）</span>
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="taskForm.remark" type="textarea" rows="2"></el-input>
+          <el-input v-model="taskForm.remark" type="textarea" rows="3"></el-input>
         </el-form-item>
       </el-form>
       <div slot="footer">
@@ -246,39 +246,24 @@
 
     <!-- 变更历史对话框 -->
     <el-dialog title="变更记录" :visible.sync="changeHistoryVisible" width="600px">
-      <el-table :data="changeHistory" v-loading="changeHistoryLoading" size="small">
-        <el-table-column label="变更类型" width="120">
-          <template slot-scope="scope">
-            <el-tag size="small">{{ scope.row.changeTypeText }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="原值" width="150">
-          <template slot-scope="scope">
-            {{ scope.row.oldValue || '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="新值" width="150">
-          <template slot-scope="scope">
-            {{ scope.row.newValue || '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="变更原因">
-          <template slot-scope="scope">
-            {{ scope.row.changeReason || '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作人" width="100">
-          <template slot-scope="scope">
-            {{ scope.row.changer?.real_name || '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="时间" width="140">
-          <template slot-scope="scope">
-            {{ formatDateTime(scope.row.createdAt) }}
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="changeHistory.length === 0 && !changeHistoryLoading" description="暂无变更记录"></el-empty>
+      <div class="change-list" v-loading="changeHistoryLoading">
+        <div v-for="change in changeHistory" :key="change.id" class="change-card">
+          <div class="change-header">
+            <el-tag size="small">{{ change.changeTypeText }}</el-tag>
+            <span class="change-time">{{ formatDateTime(change.createdAt) }}</span>
+          </div>
+          <div class="change-content">
+            <span class="change-old">{{ change.oldValue || '-' }}</span>
+            <span class="change-arrow">→</span>
+            <span class="change-new">{{ change.newValue || '-' }}</span>
+          </div>
+          <div class="change-meta">
+            <span class="change-reason" v-if="change.changeReason">{{ change.changeReason }}</span>
+            <span class="change-user">{{ change.changer?.real_name || '-' }}</span>
+          </div>
+        </div>
+        <el-empty v-if="changeHistory.length === 0 && !changeHistoryLoading" description="暂无变更记录"></el-empty>
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -328,7 +313,6 @@ export default {
         progress: 0,
         remark: ''
       },
-      // 日志相关
       logs: [],
       logsLoading: false,
       logsPagination: {
@@ -506,7 +490,6 @@ export default {
         return
       }
 
-      // 检查是否有变更
       if (
         this.taskForm.progress === this.currentTask.progress &&
         !this.taskForm.remark
@@ -527,7 +510,6 @@ export default {
         console.error(error)
       }
     },
-    // 使用共享工具函数
     getStatusType: getRoomStatusType,
     getStatusText: getRoomStatusText,
     getTaskStatusType,
@@ -545,7 +527,6 @@ export default {
       }
       return parts.join(' | ') || log.remark || '更新'
     },
-    // 时间统计方法
     calculateTotalDays() {
       if (!this.room.planned_start_date || !this.room.planned_end_date) return '-'
       return Math.max(0, diffCalendarDays(this.room.planned_start_date, this.room.planned_end_date))
@@ -582,8 +563,8 @@ export default {
     },
     getDeviationClass() {
       const deviation = (this.progress.overall || 0) - this.calculatePlannedProgress()
-      if (deviation >= 0) return 'text-success'
-      return 'text-danger'
+      if (deviation >= 0) return 'success'
+      return 'danger'
     },
     getDeviationText() {
       const deviation = (this.progress.overall || 0) - this.calculatePlannedProgress()
@@ -596,88 +577,636 @@ export default {
 </script>
 
 <style scoped>
-.info-card, .progress-card { margin-bottom: 20px; }
-.card-header { display: flex; justify-content: space-between; align-items: center; }
-.progress-overview { display: flex; align-items: center; gap: 30px; }
-.progress-text { color: #666; line-height: 2; }
-.time-stats {
+.room-detail-page {
+  min-height: 100%;
+}
+
+/* Hero 区 - 深色背景卡片 */
+.hero-section {
+  background: #000000;
+  padding: 48px 32px;
+  margin: 0 0 24px 0;
+  border-radius: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hero-content {
+  flex: 1;
+}
+
+.hero-title {
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 48px;
+  font-weight: 600;
+  letter-spacing: -0.28px;
+  line-height: 1.08;
+  color: #ffffff;
+  margin: 0 0 8px 0;
+}
+
+.hero-subtitle {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 21px;
+  font-weight: 400;
+  letter-spacing: 0.231px;
+  line-height: 1.19;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+}
+
+.hero-stats {
+  display: flex;
+  gap: 32px;
+}
+
+.hero-stats .stat-item {
+  text-align: center;
+}
+
+.hero-stats .stat-value {
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 48px;
+  font-weight: 600;
+  letter-spacing: -0.28px;
+  line-height: 1.08;
+  color: #ffffff;
+}
+
+.hero-stats .stat-label {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 17px;
+  letter-spacing: -0.374px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* 操作区 */
+.action-section {
+  background: #f5f5f7;
+  padding: 16px 24px;
+}
+
+.action-bar {
+  display: flex;
+  gap: 12px;
+}
+
+.action-btn {
+  border-radius: 980px;
+}
+
+/* 基本信息 */
+.info-section {
+  background: #f5f5f7;
+  padding: 24px;
+}
+
+.info-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.info-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 15px;
+  gap: 24px;
 }
-.stat-item {
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.info-label {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
+}
+
+.info-value {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 17px;
+  letter-spacing: -0.374px;
+  color: #1d1d1f;
+}
+
+/* 时间统计 */
+.time-section {
+  background: #f5f5f7;
+  padding: 24px;
+}
+
+.time-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+.time-item {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px 20px;
+  text-align: center;
+}
+
+.time-label {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
+}
+
+.time-value {
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.28px;
+  line-height: 1.14;
+  color: #1d1d1f;
+  margin-top: 8px;
+}
+
+.time-value.danger,
+.time-label.danger {
+  color: #ff3b30;
+}
+
+/* 进度分析 */
+.progress-section {
+  background: #f5f5f7;
+  padding: 24px;
+}
+
+.section-title {
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.28px;
+  line-height: 1.14;
+  color: #1d1d1f;
+  margin: 0;
+}
+
+.progress-header {
+  margin-bottom: 20px;
+}
+
+.progress-comparison {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.comparison-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.comparison-label {
+  width: 80px;
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 17px;
+  letter-spacing: -0.374px;
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.comparison-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 980px;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 980px;
+}
+
+.bar-fill.gray {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.bar-fill.accent {
+  background: #0071e3;
+}
+
+.comparison-num {
+  width: 50px;
+  text-align: right;
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: 0.231px;
+  color: #1d1d1f;
+}
+
+.comparison-num.danger {
+  color: #ff3b30;
+}
+
+.deviation-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-top: 16px;
+}
+
+.deviation-label {
+  width: 80px;
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 17px;
+  letter-spacing: -0.374px;
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.deviation-row .success {
+  color: #34c759;
+  font-weight: 500;
+}
+
+.deviation-row .danger {
+  color: #ff3b30;
+  font-weight: 500;
+}
+
+/* 网络流程图 */
+.graph-section {
+  background: #f5f5f7;
+  padding: 24px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.graph-legend {
+  display: flex;
+  gap: 16px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-dot.not-started { background: rgba(0, 0, 0, 0.45); }
+.legend-dot.in-progress { background: #0071e3; }
+.legend-dot.completed { background: #34c759; }
+
+.graph-container {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+/* 任务列表 */
+.tasks-section {
+  background: #f5f5f7;
+  padding: 24px;
+}
+
+.task-list {
+  background: #ffffff;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.task-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  transition: background 0.15s ease;
+}
+
+.task-card:last-child {
+  border-bottom: none;
+}
+
+.task-card:hover {
+  background: rgba(0, 113, 227, 0.08);
+}
+
+.task-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-name {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.374px;
+  color: #1d1d1f;
+}
+
+.task-date {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
+}
+
+.task-center {
   display: flex;
   align-items: center;
 }
-.stat-item .label {
-  color: #909399;
-  margin-right: 8px;
+
+.task-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
-.stat-item .value {
-  font-weight: 500;
-  color: #303133;
+
+.task-progress {
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: 0.231px;
+  color: #1d1d1f;
 }
-.progress-comparison {
+
+/* 更新日志 */
+.logs-section {
+  background: #f5f5f7;
+  padding: 24px;
+}
+
+.logs-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-.comparison-item {
+
+.log-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.log-time {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
+}
+
+.log-user {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: #1d1d1f;
+}
+
+.log-content {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
-.comparison-item .label {
-  width: 80px;
-  color: #606266;
-}
-.comparison-item .el-progress {
-  flex: 1;
-}
-.comparison-item .percent {
-  width: 50px;
-  text-align: right;
+
+.log-task {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 17px;
   font-weight: 500;
+  letter-spacing: -0.374px;
+  color: #1d1d1f;
 }
-.text-success { color: #67c23a; }
-.text-danger { color: #f56c6c; }
-.graph-legend {
+
+.log-action {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.log-remark {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
+  margin-top: 8px;
+}
+
+.pagination-wrapper {
   display: flex;
-  gap: 20px;
-  margin-bottom: 15px;
-  padding: 10px;
-  background: #f5f7fa;
-  border-radius: 4px;
-}
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
-  color: #666;
-}
-.legend-color {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  border: 2px solid;
-}
-.legend-color.not-started {
-  background: #f5f7fa;
-  border-color: #dcdfe6;
-}
-.legend-color.in-progress {
-  background: #ecf5ff;
-  border-color: #409EFF;
-}
-.legend-color.completed {
-  background: #f0f9eb;
-  border-color: #67c23a;
+  justify-content: center;
+  padding-top: 24px;
 }
 
 .status-hint {
-  font-size: 12px;
-  color: #909399;
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
   margin-left: 8px;
+}
+
+/* 变更记录 */
+.change-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.change-card {
+  background: #f5f5f7;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.change-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.change-time {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
+}
+
+.change-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.change-old,
+.change-new {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 17px;
+  letter-spacing: -0.374px;
+  color: #1d1d1f;
+}
+
+.change-arrow {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.change-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.change-reason {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.change-user {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
+}
+
+/* 移动端适配 */
+@media screen and (max-width: 768px) {
+  .hero-section {
+    flex-direction: column;
+    text-align: center;
+    padding: 32px 16px;
+    gap: 24px;
+  }
+
+  .hero-title {
+    font-size: 32px;
+    letter-spacing: -0.28px;
+    line-height: 1.14;
+  }
+
+  .hero-subtitle {
+    font-size: 17px;
+    letter-spacing: -0.374px;
+    line-height: 1.47;
+  }
+
+  .hero-stats {
+    justify-content: center;
+    gap: 24px;
+  }
+
+  .hero-stats .stat-value {
+    font-size: 32px;
+    letter-spacing: -0.28px;
+    line-height: 1.14;
+  }
+
+  .hero-stats .stat-label {
+    font-size: 14px;
+    letter-spacing: -0.224px;
+  }
+
+  .action-section {
+    padding: 12px 16px;
+  }
+
+  .action-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .info-section,
+  .time-section,
+  .progress-section,
+  .graph-section,
+  .tasks-section,
+  .logs-section {
+    padding: 16px;
+  }
+
+  .info-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
+  .time-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .time-value {
+    font-size: 24px;
+  }
+
+  .section-title {
+    font-size: 21px;
+    letter-spacing: 0.231px;
+    line-height: 1.19;
+  }
+
+  .comparison-row {
+    flex-wrap: wrap;
+  }
+
+  .comparison-label {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .graph-legend {
+    flex-wrap: wrap;
+  }
+
+  .task-card {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 16px;
+  }
+
+  .task-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .task-right {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
 }
 </style>

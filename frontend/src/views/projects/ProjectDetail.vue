@@ -1,128 +1,131 @@
 <template>
-  <div class="project-detail">
-    <!-- 项目信息头部 -->
-    <el-card class="project-header">
-      <div slot="header" class="header-content">
-        <div class="project-info">
-          <h2>{{ project.name }}</h2>
-          <div class="project-meta">
-            <span v-if="project.code">编码: {{ project.code }}</span>
-            <el-tag type="success" size="small">进行中</el-tag>
-          </div>
+  <div class="project-detail-page">
+    <!-- Hero 区 - 深色背景卡片 -->
+    <section class="hero-section">
+      <div class="hero-content">
+        <h1 class="hero-title">{{ project.name }}</h1>
+        <p class="hero-subtitle" v-if="project.code">{{ project.code }}</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-item">
+          <div class="stat-value">{{ projectStats.total || 0 }}</div>
+          <div class="stat-label">机房</div>
         </div>
-        <div class="header-actions" v-if="isAdmin">
-          <el-button type="primary" size="small" @click="goToCreateRoom">
-            <i class="el-icon-plus"></i> 新建机房
-          </el-button>
-          <el-button type="info" size="small" @click="showEditProject">
-            编辑项目
-          </el-button>
+        <div class="stat-item">
+          <div class="stat-value">{{ projectStats.progress || 0 }}%</div>
+          <div class="stat-label">进度</div>
+        </div>
+        <div class="stat-item warning" v-if="delayedTasks.length > 0">
+          <div class="stat-value">{{ delayedTasks.length }}</div>
+          <div class="stat-label">延期</div>
         </div>
       </div>
-      <el-descriptions :column="3" border size="small">
-        <el-descriptions-item label="项目描述">{{ project.description || '暂无描述' }}</el-descriptions-item>
-        <el-descriptions-item label="机房总数">{{ projectStats.total || 0 }}</el-descriptions-item>
-        <el-descriptions-item label="整体进度">
-          <el-progress :percentage="projectStats.progress || 0" :stroke-width="15"></el-progress>
-        </el-descriptions-item>
-      </el-descriptions>
-    </el-card>
+      <div class="hero-actions" v-if="isAdmin">
+        <el-button type="primary" class="hero-btn" @click="goToCreateRoom">新建机房</el-button>
+      </div>
+    </section>
 
-    <!-- 延期任务预警 -->
-    <el-card v-if="delayedTasks.length > 0" class="delayed-card">
-      <div slot="header">
-        <span class="delayed-title">
-          <i class="el-icon-warning"></i>
-          延期任务预警
-          <el-tooltip content="超过计划完成日期但尚未完成的任务" placement="top">
-            <i class="el-icon-question"></i>
-          </el-tooltip>
-        </span>
-        <el-tag type="danger" size="small">{{ delayedTasks.length }} 个</el-tag>
-      </div>
-      <div class="delayed-list">
-        <div v-for="task in delayedTasks" :key="task.id" class="delayed-item" @click="goToRoom(task.room?.id)">
-          <div class="delayed-info">
-            <span class="task-name">{{ task.name }}</span>
-            <span class="room-name">({{ task.room?.name }})</span>
-            <span class="delay-days">延期 {{ task.delayDays }} 天</span>
+    <!-- 延期任务预警 - 可展开 -->
+    <section v-if="delayedTasks.length > 0" class="delayed-section">
+      <div class="delayed-card" :class="{ expanded: delayedExpanded }">
+        <!-- 头部（点击展开/收起） -->
+        <div class="delayed-header" @click="delayedExpanded = !delayedExpanded">
+          <div class="header-left">
+            <i class="el-icon-warning"></i>
+            <span class="header-title">延期任务</span>
+            <el-tooltip content="超过计划完成日期但尚未完成的任务" placement="top">
+              <i class="el-icon-question"></i>
+            </el-tooltip>
           </div>
-          <div class="delayed-manager">
-            负责人: {{ task.room?.manager?.real_name || '未分配' }}
+          <div class="header-right">
+            <span class="delayed-count">{{ delayedTasks.length }} 个</span>
+            <i :class="delayedExpanded ? 'el-icon-arrow-up' : 'el-icon-arrow-down'" class="expand-icon"></i>
+          </div>
+        </div>
+
+        <!-- 展开的任务列表 -->
+        <div v-if="delayedExpanded" class="delayed-list">
+          <div
+            v-for="task in delayedTasks"
+            :key="task.id"
+            class="delayed-item"
+            @click="goToRoom(task.room?.id)"
+          >
+            <div class="item-left">
+              <div class="task-name">{{ task.name }}</div>
+              <div class="room-name">{{ task.room?.name }}</div>
+            </div>
+            <div class="item-right">
+              <span class="delay-days">延期 {{ task.delayDays }} 天</span>
+              <span class="manager">{{ task.room?.manager?.real_name || '未分配' }}</span>
+            </div>
           </div>
         </div>
       </div>
-    </el-card>
+    </section>
 
-    <!-- 按负责人分组的机房 -->
-    <div class="manager-sections" v-loading="loading">
+    <!-- 负责人分组 -->
+    <section class="managers-section" v-loading="loading">
       <el-empty v-if="managerStats.length === 0 && !loading" description="该项目暂无机房"></el-empty>
 
-      <el-card
-        v-for="manager in managerStats"
-        :key="manager.id || 'unassigned'"
-        class="manager-card"
-        :class="{ expanded: expandedManager === manager.id }"
-      >
-        <!-- 负责人头部（点击展开/收起） -->
-        <div slot="header" class="manager-header" @click="toggleExpand(manager.id)">
-          <div class="manager-avatar">
-            <i class="el-icon-user"></i>
-          </div>
-          <div class="manager-meta">
-            <div class="manager-name">{{ manager.name }}</div>
-            <div class="manager-dept" v-if="manager.department">{{ manager.department }}</div>
-          </div>
-          <div class="manager-badges">
-            <span class="badge total">{{ manager.stats?.total || 0 }} 个机房</span>
-            <span class="badge completed" v-if="manager.stats?.completed">{{ manager.stats.completed }} 完成</span>
-            <span class="badge in-progress" v-if="manager.stats?.in_progress">{{ manager.stats.in_progress }} 在建</span>
-          </div>
-          <div class="expand-icon">
-            <i :class="expandedManager === manager.id ? 'el-icon-arrow-up' : 'el-icon-arrow-down'"></i>
-          </div>
-        </div>
-
-        <!-- 进度概览 -->
-        <div class="manager-progress">
-          <div class="progress-ring">
-            <el-progress
-              type="circle"
-              :percentage="manager.stats?.avgProgress || 0"
-              :width="60"
-              :stroke-width="6"
-              :color="getProgressColor(manager.stats?.avgProgress)"
-            ></el-progress>
-          </div>
-          <div class="progress-detail">
-            <div class="progress-label">平均进度</div>
-            <div class="progress-value">{{ manager.stats?.avgProgress || 0 }}%</div>
-          </div>
-        </div>
-
-        <!-- 机房列表（仅在展开时显示） -->
-        <div v-if="expandedManager === manager.id" class="room-list">
-          <div
-            v-for="room in manager.rooms"
-            :key="room.id"
-            class="room-row"
-            @click="goToRoom(room.id)"
-          >
-            <div class="room-status-dot" :class="room.status"></div>
-            <div class="room-name">{{ room.name }}</div>
-            <div class="room-status">{{ getStatusText(room.status) }}</div>
-            <div class="room-progress-bar">
-              <div class="progress-fill" :style="{ width: (room.progress || 0) + '%' }"></div>
+      <div class="manager-list">
+        <div
+          v-for="manager in managerStats"
+          :key="manager.id || 'unassigned'"
+          class="manager-card"
+          :class="{ expanded: expandedManager === manager.id }"
+        >
+          <!-- 负责人头部 -->
+          <div class="manager-header" @click="toggleExpand(manager.id)">
+            <div class="manager-left">
+              <div class="manager-avatar">
+                <i class="el-icon-user"></i>
+              </div>
+              <div class="manager-meta">
+                <div class="manager-name">{{ manager.name }}</div>
+                <div class="manager-dept" v-if="manager.department">{{ manager.department }}</div>
+              </div>
             </div>
-            <div class="room-progress-text">{{ room.progress || 0 }}%</div>
-            <i class="el-icon-arrow-right"></i>
+            <div class="manager-center">
+              <div class="progress-mini">
+                <span class="progress-num">{{ manager.stats?.avgProgress || 0 }}%</span>
+                <span class="progress-label">平均进度</span>
+              </div>
+            </div>
+            <div class="manager-right">
+              <span class="badge total">{{ manager.stats?.total || 0 }} 个机房</span>
+              <span class="badge completed" v-if="manager.stats?.completed">{{ manager.stats.completed }} 完成</span>
+              <i :class="expandedManager === manager.id ? 'el-icon-arrow-up' : 'el-icon-arrow-down'" class="expand-icon"></i>
+            </div>
+          </div>
+
+          <!-- 机房列表 -->
+          <div v-if="expandedManager === manager.id" class="room-list">
+            <div
+              v-for="room in manager.rooms"
+              :key="room.id"
+              class="room-card"
+              @click="goToRoom(room.id)"
+            >
+              <div class="room-left">
+                <div class="room-status-dot" :class="room.status"></div>
+                <span class="room-name">{{ room.name }}</span>
+              </div>
+              <div class="room-center">
+                <span class="room-status">{{ getStatusText(room.status) }}</span>
+              </div>
+              <div class="room-right">
+                <span class="room-progress">{{ room.progress || 0 }}%</span>
+                <i class="el-icon-arrow-right"></i>
+              </div>
+            </div>
           </div>
         </div>
-      </el-card>
-    </div>
+      </div>
+    </section>
 
     <!-- 编辑项目对话框 -->
-    <el-dialog title="编辑项目" :visible.sync="editProjectVisible" width="400px">
+    <el-dialog title="编辑项目" :visible.sync="editProjectVisible" width="420px">
       <el-form :model="projectForm" :rules="projectRules" ref="projectForm" label-width="80px">
         <el-form-item label="项目名称" prop="name">
           <el-input v-model="projectForm.name"></el-input>
@@ -131,7 +134,7 @@
           <el-input v-model="projectForm.code"></el-input>
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="projectForm.description" type="textarea" rows="2"></el-input>
+          <el-input v-model="projectForm.description" type="textarea" rows="3"></el-input>
         </el-form-item>
       </el-form>
       <div slot="footer">
@@ -159,6 +162,7 @@ export default {
       projectStats: { total: 0, progress: 0 },
       managerStats: [],
       delayedTasks: [],
+      delayedExpanded: false,
       expandedManager: null,
       editProjectVisible: false,
       saving: false,
@@ -183,15 +187,12 @@ export default {
     async loadData() {
       this.loading = true
       try {
-        // 获取项目详情
         const projectRes = await getProjectDetail(this.projectId)
         this.project = projectRes.data
 
-        // 获取项目负责人统计
         const managerRes = await getByManager({ project_id: this.projectId })
         this.managerStats = managerRes.data
 
-        // 计算项目总体统计
         const total = this.managerStats.reduce((sum, m) => sum + (m.stats?.total || 0), 0)
         const avgProgress = this.managerStats.reduce((sum, m) => sum + (m.stats?.avgProgress || 0), 0)
         this.projectStats = {
@@ -199,7 +200,6 @@ export default {
           progress: total > 0 ? Math.round(avgProgress / this.managerStats.length) : 0
         }
 
-        // 获取延期任务
         const delayedRes = await getDelayed({ project_id: this.projectId })
         this.delayedTasks = delayedRes.data
       } catch (error) {
@@ -216,12 +216,6 @@ export default {
       } else {
         this.expandedManager = managerId
       }
-    },
-    getProgressColor(progress) {
-      if (progress >= 100) return '#52c41a'
-      if (progress >= 70) return '#1890ff'
-      if (progress >= 40) return '#faad14'
-      return '#d9d9d9'
     },
     getStatusText(status) {
       return getRoomStatusText(status)
@@ -262,127 +256,267 @@ export default {
 </script>
 
 <style scoped>
-.project-detail {
+.project-detail-page {
   min-height: 100%;
 }
 
-.project-header {
-  margin-bottom: 20px;
-}
-
-.header-content {
+/* Hero 区 - 深色背景卡片 */
+.hero-section {
+  background: #000000;
+  padding: 48px 32px;
+  margin: 0 0 24px 0;
+  border-radius: 18px;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.project-info h2 {
+.hero-content {
+  flex: 1;
+}
+
+.hero-title {
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 48px;
+  font-weight: 600;
+  letter-spacing: -0.28px;
+  line-height: 1.08;
+  color: #ffffff;
+  margin: 0 0 8px 0;
+}
+
+.hero-subtitle {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 21px;
+  font-weight: 400;
+  letter-spacing: 0.231px;
+  line-height: 1.19;
+  color: rgba(255, 255, 255, 0.6);
   margin: 0;
-  font-size: 20px;
-  color: #262626;
 }
 
-.project-meta {
+.hero-stats {
+  display: flex;
+  gap: 32px;
+}
+
+.hero-stats .stat-item {
+  text-align: center;
+}
+
+.hero-stats .stat-value {
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 48px;
+  font-weight: 600;
+  letter-spacing: -0.28px;
+  line-height: 1.08;
+  color: #ffffff;
+}
+
+.hero-stats .stat-item.warning .stat-value {
+  color: #ff9500;
+}
+
+.hero-stats .stat-label {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 17px;
+  letter-spacing: -0.374px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.hero-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-  font-size: 13px;
-  color: #8c8c8c;
+  gap: 12px;
 }
 
-/* 延期预警卡片 */
+.hero-btn {
+  border-radius: 980px;
+}
+
+/* 延期任务区 */
+.delayed-section {
+  margin-bottom: 24px;
+}
+
 .delayed-card {
-  margin-bottom: 20px;
-  border-color: #faad14;
+  background: #ffffff;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-.delayed-title {
+.delayed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.delayed-header:hover {
+  background: rgba(0, 113, 227, 0.08);
+}
+
+.header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
-.delayed-title i.el-icon-warning {
-  color: #faad14;
+.header-left .el-icon-warning {
+  color: #ff9500;
+  font-size: 20px;
 }
 
+.header-title {
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: 0.231px;
+  line-height: 1.19;
+  color: #1d1d1f;
+}
+
+.header-left .el-icon-question {
+  color: rgba(0, 0, 0, 0.48);
+  font-size: 16px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.delayed-count {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 17px;
+  letter-spacing: -0.374px;
+  color: #ff3b30;
+  background: rgba(255, 59, 48, 0.12);
+  padding: 4px 12px;
+  border-radius: 980px;
+}
+
+.expand-icon {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 14px;
+}
+
+/* 延期任务列表 */
 .delayed-list {
-  max-height: 200px;
-  overflow-y: auto;
+  padding: 8px 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .delayed-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
-  background: #fffbe6;
-  border-radius: 6px;
-  margin-bottom: 8px;
+  padding: 12px 16px;
+  background: rgba(255, 149, 0, 0.08);
+  border-radius: 8px;
   cursor: pointer;
+  transition: background 0.15s ease;
 }
 
 .delayed-item:hover {
-  background: #fff1b8;
+  background: rgba(255, 149, 0, 0.16);
 }
 
-.delayed-info {
+.item-left {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .task-name {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 17px;
   font-weight: 500;
-  color: #262626;
+  letter-spacing: -0.374px;
+  color: #1d1d1f;
 }
 
 .room-name {
-  color: #8c8c8c;
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
 }
 
-.delay-days {
-  color: #cf1322;
-  font-weight: 500;
-}
-
-.delayed-manager {
-  color: #8c8c8c;
-  font-size: 13px;
-}
-
-/* 负责人卡片 */
-.manager-sections {
+.item-right {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 16px;
 }
 
+.delay-days {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: #ff3b30;
+  font-weight: 500;
+}
+
+.manager {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
+}
+
+/* 负责人区 */
+.managers-section {
+  background: #f5f5f7;
+  padding: 24px;
+}
+
+.manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .manager-card {
+  background: #ffffff;
   border-radius: 12px;
 }
 
 .manager-card.expanded {
-  border-color: #667eea;
+  background: rgba(0, 113, 227, 0.04);
 }
 
 .manager-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   cursor: pointer;
+  padding: 20px 24px;
+}
+
+.manager-header:hover {
+  background: rgba(0, 113, 227, 0.08);
+}
+
+.manager-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .manager-avatar {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #0071e3;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: #ffffff;
   font-size: 16px;
 }
 
@@ -391,95 +525,99 @@ export default {
 }
 
 .manager-name {
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 21px;
   font-weight: 600;
-  color: #262626;
+  letter-spacing: 0.231px;
+  line-height: 1.19;
+  color: #1d1d1f;
 }
 
 .manager-dept {
-  font-size: 12px;
-  color: #8c8c8c;
-}
-
-.manager-badges {
-  display: flex;
-  gap: 6px;
-}
-
-.badge {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 10px;
-}
-
-.badge.total {
-  background: #f5f5f5;
-  color: #595959;
-}
-
-.badge.completed {
-  background: #f6ffed;
-  color: #52c41a;
-}
-
-.badge.in-progress {
-  background: #e6f7ff;
-  color: #1890ff;
-}
-
-.expand-icon {
-  color: #8c8c8c;
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
   font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
 }
 
-.manager-progress {
+.manager-center {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: #fafafa;
-  border-radius: 8px;
-  margin-bottom: 12px;
 }
 
-.progress-ring {
-  flex-shrink: 0;
+.progress-mini {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.progress-detail {
-  flex: 1;
+.progress-num {
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: 0.231px;
+  color: #1d1d1f;
 }
 
 .progress-label {
-  font-size: 12px;
-  color: #8c8c8c;
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
 }
 
-.progress-value {
-  font-size: 20px;
-  font-weight: 600;
-  color: #262626;
+.manager-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.badge {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  padding: 4px 12px;
+  border-radius: 980px;
+}
+
+.badge.total {
+  background: #f5f5f7;
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.badge.completed {
+  background: rgba(52, 199, 89, 0.12);
+  color: #34c759;
+}
+
+.expand-icon {
+  color: rgba(0, 0, 0, 0.45);
 }
 
 /* 机房列表 */
 .room-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  padding: 8px 24px 16px;
 }
 
-.room-row {
+.room-card {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: #fafafa;
-  border-radius: 6px;
+  gap: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.15s ease;
 }
 
-.room-row:hover {
-  background: #f0f0f0;
+.room-card:hover {
+  background: rgba(0, 113, 227, 0.08);
+}
+
+.room-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
 }
 
 .room-status-dot {
@@ -488,62 +626,159 @@ export default {
   border-radius: 50%;
 }
 
-.room-status-dot.planning { background: #d9d9d9; }
-.room-status-dot.in_progress { background: #1890ff; }
-.room-status-dot.completed { background: #52c41a; }
-.room-status-dot.paused { background: #faad14; }
+.room-status-dot.planning { background: rgba(0, 0, 0, 0.45); }
+.room-status-dot.in_progress { background: #0071e3; }
+.room-status-dot.completed { background: #34c759; }
+.room-status-dot.paused { background: #ff9500; }
 
 .room-name {
-  flex: 1;
-  font-size: 14px;
-  color: #262626;
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 17px;
+  letter-spacing: -0.374px;
+  color: #1d1d1f;
+}
+
+.room-center {
+  display: flex;
+  align-items: center;
 }
 
 .room-status {
-  font-size: 12px;
-  color: #8c8c8c;
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
 }
 
-.room-progress-bar {
-  width: 50px;
-  height: 4px;
-  background: #e8e8e8;
-  border-radius: 2px;
+.room-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #1890ff, #52c41a);
-  border-radius: 2px;
+.room-progress {
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.374px;
+  color: #1d1d1f;
 }
 
-.room-progress-text {
-  font-size: 12px;
-  color: #595959;
-  width: 30px;
-  text-align: right;
-}
-
-.room-row .el-icon-arrow-right {
-  color: #bfbfbf;
+.room-card .el-icon-arrow-right {
+  color: rgba(0, 0, 0, 0.25);
   font-size: 12px;
 }
 
 /* 移动端适配 */
 @media screen and (max-width: 768px) {
-  .header-content {
+  .hero-section {
+    flex-direction: column;
+    text-align: center;
+    padding: 32px 16px;
+    gap: 24px;
+  }
+
+  .hero-title {
+    font-size: 32px;
+    letter-spacing: -0.28px;
+    line-height: 1.14;
+  }
+
+  .hero-subtitle {
+    font-size: 17px;
+    letter-spacing: -0.374px;
+    line-height: 1.47;
+  }
+
+  .hero-stats {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .hero-stats .stat-value {
+    font-size: 32px;
+    letter-spacing: -0.28px;
+    line-height: 1.14;
+  }
+
+  .hero-stats .stat-label {
+    font-size: 14px;
+    letter-spacing: -0.224px;
+  }
+
+  .hero-actions {
+    justify-content: center;
+  }
+
+  .delayed-header {
+    padding: 16px;
+  }
+
+  .header-title {
+    font-size: 17px;
+    letter-spacing: -0.374px;
+  }
+
+  .delayed-list {
+    padding: 8px 16px 12px;
+  }
+
+  .delayed-item {
     flex-direction: column;
     align-items: flex-start;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .item-right {
+    width: 100%;
+    justify-content: flex-start;
     gap: 12px;
+  }
+
+  .managers-section {
+    padding: 16px;
   }
 
   .manager-header {
     flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px;
   }
 
-  .manager-badges {
+  .manager-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .manager-center {
     width: 100%;
     margin-top: 8px;
+    justify-content: flex-start;
+  }
+
+  .manager-right {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
+
+  .room-card {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .room-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .room-right {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 16px;
   }
 }
 </style>

@@ -1,116 +1,127 @@
 <template>
-  <div class="email-form">
-    <el-card :header="isEdit ? '编辑邮件' : '创建邮件'">
-      <el-form ref="form" :model="form" :rules="rules" label-width="100px">
-        <el-form-item label="邮件主题" prop="subject">
-          <el-input v-model="form.subject" placeholder="请输入邮件主题"></el-input>
-        </el-form-item>
+  <div class="email-form-page">
+    <!-- Hero 区 -->
+    <section class="hero-section">
+      <div class="hero-content">
+        <h1 class="hero-title">{{ isEdit ? '编辑邮件' : '创建邮件' }}</h1>
+        <p class="hero-subtitle">设置邮件内容和发送计划</p>
+      </div>
+    </section>
 
-        <el-form-item label="邮件内容" prop="content">
-          <el-input
-            v-model="form.content"
-            type="textarea"
-            :rows="10"
-            placeholder="请输入邮件内容（支持HTML格式）"
-          ></el-input>
-        </el-form-item>
+    <!-- 表单区 -->
+    <section class="form-section">
+      <div class="form-card">
+        <el-form ref="form" :model="form" :rules="rules" label-position="top">
+          <el-form-item label="邮件主题" prop="subject">
+            <el-input v-model="form.subject" placeholder="请输入邮件主题"></el-input>
+          </el-form-item>
 
-        <el-form-item label="接收人" prop="recipients">
-          <!-- 快捷选择负责人 -->
-          <div class="recipient-section">
-            <div class="section-label">
-              <i class="el-icon-user"></i>
-              选择负责人
+          <el-form-item label="邮件内容" prop="content">
+            <el-input
+              v-model="form.content"
+              type="textarea"
+              :rows="12"
+              placeholder="请输入邮件内容（支持HTML格式）"
+            ></el-input>
+          </el-form-item>
+
+          <el-form-item label="接收人" prop="recipients">
+            <!-- 快捷选择负责人 -->
+            <div class="recipient-section">
+              <div class="section-label">
+                <i class="el-icon-user"></i>
+                选择负责人
+              </div>
+              <el-select
+                v-model="selectedManagers"
+                multiple
+                filterable
+                placeholder="选择各机房负责人"
+                style="width: 100%;"
+                @change="handleManagerChange"
+              >
+                <el-option
+                  v-for="manager in managerOptions"
+                  :key="manager.id"
+                  :label="`${manager.real_name} (${manager.email})${manager.department ? ' - ' + manager.department : ''}`"
+                  :value="manager.id"
+                ></el-option>
+              </el-select>
             </div>
-            <el-select
-              v-model="selectedManagers"
-              multiple
-              filterable
-              placeholder="选择各机房负责人"
+
+            <!-- 自定义邮箱输入 -->
+            <div class="recipient-section">
+              <div class="section-label">
+                <i class="el-icon-message"></i>
+                自定义邮箱
+              </div>
+              <div class="custom-email-input">
+                <el-input
+                  v-model="customEmailInput"
+                  placeholder="输入邮箱地址，按回车添加"
+                  @keyup.enter.native="addCustomEmail"
+                >
+                  <el-button slot="append" @click="addCustomEmail">添加</el-button>
+                </el-input>
+              </div>
+            </div>
+
+            <!-- 已选接收人列表 -->
+            <div v-if="form.recipients.length > 0" class="recipient-list">
+              <div class="list-header">
+                <span>已选接收人 ({{ form.recipients.length }} 人)</span>
+                <el-button type="text" size="small" @click="clearAllRecipients">清空</el-button>
+              </div>
+              <div class="recipient-tags">
+                <el-tag
+                  v-for="r in form.recipients"
+                  :key="r.email"
+                  :type="r.type === 'manager' ? 'primary' : (r.type === 'user' ? 'success' : 'info')"
+                  closable
+                  @close="removeRecipient(r)"
+                >
+                  <span v-if="r.type === 'manager'"><i class="el-icon-user"></i> {{ r.name }}</span>
+                  <span v-else-if="r.type === 'user'">{{ r.name }}</span>
+                  <span v-else><i class="el-icon-message"></i> {{ r.email }}</span>
+                </el-tag>
+              </div>
+            </div>
+          </el-form-item>
+
+          <el-form-item label="发送时间" prop="scheduled_time">
+            <el-date-picker
+              v-model="form.scheduled_time"
+              type="datetime"
+              placeholder="选择发送时间"
+              :picker-options="pickerOptions"
               style="width: 100%;"
-              @change="handleManagerChange"
-            >
-              <el-option
-                v-for="manager in managerOptions"
-                :key="manager.id"
-                :label="`${manager.real_name} (${manager.email})${manager.department ? ' - ' + manager.department : ''}`"
-                :value="manager.id"
-              ></el-option>
+            ></el-date-picker>
+          </el-form-item>
+
+          <el-form-item label="重复类型">
+            <el-select v-model="form.repeat_type" placeholder="请选择">
+              <el-option label="单次发送" value="none"></el-option>
+              <el-option label="每日重复" value="daily"></el-option>
+              <el-option label="每周重复" value="weekly"></el-option>
+              <el-option label="每月重复" value="monthly"></el-option>
             </el-select>
-          </div>
+          </el-form-item>
 
-          <!-- 自定义邮箱输入 -->
-          <div class="recipient-section">
-            <div class="section-label">
-              <i class="el-icon-message"></i>
-              自定义邮箱
-            </div>
-            <div class="custom-email-input">
-              <el-input
-                v-model="customEmailInput"
-                placeholder="输入邮箱地址，按回车添加"
-                @keyup.enter.native="addCustomEmail"
-              >
-                <el-button slot="append" @click="addCustomEmail">添加</el-button>
-              </el-input>
-            </div>
-          </div>
+          <el-form-item label="状态">
+            <el-radio-group v-model="form.status">
+              <el-radio label="draft">保存为草稿</el-radio>
+              <el-radio label="scheduled">立即调度</el-radio>
+            </el-radio-group>
+          </el-form-item>
 
-          <!-- 已选接收人列表 -->
-          <div v-if="form.recipients.length > 0" class="recipient-list">
-            <div class="list-header">
-              <span>已选接收人 ({{ form.recipients.length }} 人)</span>
-              <el-button type="text" size="small" @click="clearAllRecipients">清空</el-button>
-            </div>
-            <div class="recipient-tags">
-              <el-tag
-                v-for="r in form.recipients"
-                :key="r.email"
-                :type="r.type === 'manager' ? 'primary' : (r.type === 'user' ? 'success' : 'info')"
-                closable
-                @close="removeRecipient(r)"
-              >
-                <span v-if="r.type === 'manager'"><i class="el-icon-user"></i> {{ r.name }}</span>
-                <span v-else-if="r.type === 'user'">{{ r.name }}</span>
-                <span v-else><i class="el-icon-message"></i> {{ r.email }}</span>
-              </el-tag>
-            </div>
-          </div>
-        </el-form-item>
-
-        <el-form-item label="发送时间" prop="scheduled_time">
-          <el-date-picker
-            v-model="form.scheduled_time"
-            type="datetime"
-            placeholder="选择发送时间"
-            :picker-options="pickerOptions"
-            style="width: 100%;"
-          ></el-date-picker>
-        </el-form-item>
-
-        <el-form-item label="重复类型">
-          <el-select v-model="form.repeat_type" placeholder="请选择">
-            <el-option label="单次发送" value="none"></el-option>
-            <el-option label="每日重复" value="daily"></el-option>
-            <el-option label="每周重复" value="weekly"></el-option>
-            <el-option label="每月重复" value="monthly"></el-option>
-          </el-select>
-        </el-form-item>
-
-        <el-form-item label="状态">
-          <el-radio-group v-model="form.status">
-            <el-radio label="draft">保存为草稿</el-radio>
-            <el-radio label="scheduled">立即调度</el-radio>
-          </el-radio-group>
-        </el-form-item>
-
-        <el-form-item>
-          <el-button type="primary" :loading="loading" @click="handleSubmit">保存</el-button>
-          <el-button v-if="form.status === 'scheduled'" type="success" :loading="sending" @click="handleSendNow">立即发送</el-button>
-          <el-button @click="goBack">返回</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
+          <el-form-item class="form-actions">
+            <el-button type="primary" class="primary-btn" :loading="loading" @click="handleSubmit">保存</el-button>
+            <el-button v-if="form.status === 'scheduled'" type="success" class="success-btn" :loading="sending" @click="handleSendNow">立即发送</el-button>
+            <el-button @click="goBack">返回</el-button>
+          </el-form-item>
+        </el-form>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -303,21 +314,78 @@ export default {
 </script>
 
 <style scoped>
-.email-form {
-  max-width: 800px;
+.email-form-page {
+  min-height: 100%;
+}
+
+/* Hero 区 - 深色背景卡片 */
+.hero-section {
+  background: #000000;
+  padding: 48px 32px;
+  margin: 0 0 24px 0;
+  border-radius: 18px;
+  text-align: center;
+}
+
+.hero-title {
+  font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
+  font-size: 48px;
+  font-weight: 600;
+  letter-spacing: -0.28px;
+  line-height: 1.08;
+  color: #ffffff;
+  margin: 0 0 8px 0;
+}
+
+.hero-subtitle {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 21px;
+  font-weight: 400;
+  letter-spacing: 0.231px;
+  line-height: 1.19;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+}
+
+/* 表单区 */
+.form-section {
+  background: #f5f5f7;
+  padding: 48px 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.form-card {
+  width: 100%;
+  max-width: 680px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 32px;
+}
+
+/* 表单样式 */
+.form-card .el-form-item__label {
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.374px;
+  color: #1d1d1f;
+  padding-bottom: 8px;
 }
 
 .recipient-section {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .section-label {
-  font-size: 13px;
-  color: #8c8c8c;
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.48);
   margin-bottom: 8px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .custom-email-input {
@@ -325,19 +393,21 @@ export default {
 }
 
 .recipient-list {
-  margin-top: 16px;
-  padding: 12px;
-  background: #fafafa;
-  border-radius: 6px;
+  margin-top: 20px;
+  padding: 16px;
+  background: #f5f5f7;
+  border-radius: 8px;
 }
 
 .list-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: #595959;
+  margin-bottom: 12px;
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  color: rgba(0, 0, 0, 0.8);
 }
 
 .recipient-tags {
@@ -347,10 +417,62 @@ export default {
 }
 
 .recipient-tags .el-tag {
-  max-width: 200px;
+  font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  padding: 4px 12px;
+  border-radius: 980px;
 }
 
 .recipient-tags .el-tag i {
   margin-right: 4px;
+}
+
+.form-actions {
+  margin-top: 32px;
+  padding-top: 24px;
+}
+
+.primary-btn,
+.success-btn {
+  border-radius: 980px;
+}
+
+/* 移动端适配 */
+@media screen and (max-width: 768px) {
+  .hero-section {
+    padding: 32px 16px;
+  }
+
+  .hero-title {
+    font-size: 32px;
+    letter-spacing: -0.28px;
+    line-height: 1.14;
+  }
+
+  .hero-subtitle {
+    font-size: 17px;
+    letter-spacing: -0.374px;
+    line-height: 1.47;
+  }
+
+  .form-section {
+    padding: 24px 16px;
+  }
+
+  .form-card {
+    padding: 20px;
+  }
+
+  .form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .form-actions .el-button {
+    flex: 1;
+    min-width: 120px;
+  }
 }
 </style>

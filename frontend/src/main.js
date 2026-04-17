@@ -4,9 +4,39 @@ import router from './router'
 import store from './store'
 import ElementUI, { Message } from 'element-ui'
 import 'element-ui/lib/theme-chalk/index.css'
+import '@/styles/design-system.scss'
 
 Vue.config.productionTip = false
 Vue.use(ElementUI)
+
+// 抑制 Vue Router 导航守卫重定向错误（Vue Router 3.x 已知行为）
+const originalPush = router.push
+const originalReplace = router.replace
+router.push = function push(location) {
+  return originalPush.call(this, location).catch(err => {
+    if (err.name === 'NavigationDuplicated' || err.message.includes('Redirected')) {
+      return Promise.resolve()
+    }
+    return Promise.reject(err)
+  })
+}
+router.replace = function replace(location) {
+  return originalReplace.call(this, location).catch(err => {
+    if (err.name === 'NavigationDuplicated' || err.message.includes('Redirected')) {
+      return Promise.resolve()
+    }
+    return Promise.reject(err)
+  })
+}
+
+// 全局路由错误处理器
+router.onError((error) => {
+  if (error.message.includes('Redirected') || error.name === 'NavigationDuplicated') {
+    // 忽略导航重定向错误
+    return
+  }
+  console.error('Router error:', error)
+})
 
 // 解析JWT token获取过期时间
 const parseJwtExp = (token) => {

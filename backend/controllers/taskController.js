@@ -297,7 +297,10 @@ const getMyRoomTasks = async (req, res, next) => {
         templateToTask[t.template_id] = t;
       });
 
-      // 找到所有当前待处理任务（未完成且所有前置任务已完成的任务）
+      // 找到所有当前待处理任务
+      // 显示两类任务：
+      // 1. 可进行的任务：未完成且所有前置任务已完成
+      // 2. 等待中的任务：未完成但有前置任务未完成（并行分支中还没开始的任务也显示）
       const currentTasks = [];
       for (const task of tasks) {
         if (task.status === 'completed') continue;
@@ -309,12 +312,12 @@ const getMyRoomTasks = async (req, res, next) => {
           return prevTask && prevTask.status === 'completed';
         });
 
-        if (allDepsCompleted) {
-          currentTasks.push({
-            ...task.toJSON(),
-            room: room.toJSON()
-          });
-        }
+        // 所有未完成的任务都显示，但标记是否可以操作
+        currentTasks.push({
+          ...task.toJSON(),
+          room: room.toJSON(),
+          canStart: allDepsCompleted  // 是否可以开始（前置任务已完成）
+        });
       }
 
       const taskSummary = calculateTaskSummary(tasks);
