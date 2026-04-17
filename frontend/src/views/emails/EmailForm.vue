@@ -321,7 +321,7 @@ export default {
 /* Hero 区 - 深色背景卡片 */
 .hero-section {
   background: #000000;
-  padding: 48px 32px;
+  padding: 32px 24px;
   margin: 0 0 24px 0;
   border-radius: 18px;
   text-align: center;
@@ -329,20 +329,20 @@ export default {
 
 .hero-title {
   font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
-  font-size: 48px;
+  font-size: 32px;
   font-weight: 600;
-  letter-spacing: -0.28px;
-  line-height: 1.08;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   color: #ffffff;
   margin: 0 0 8px 0;
 }
 
 .hero-subtitle {
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 21px;
+  font-size: 16px;
   font-weight: 400;
-  letter-spacing: 0.231px;
-  line-height: 1.19;
+  letter-spacing: 0;
+  line-height: 1.5;
   color: rgba(255, 255, 255, 0.8);
   margin: 0;
 }
@@ -350,7 +350,7 @@ export default {
 /* 表单区 */
 .form-section {
   background: #f5f5f7;
-  padding: 48px 24px;
+  padding: 32px 24px;
   display: flex;
   justify-content: center;
 }
@@ -360,15 +360,15 @@ export default {
   max-width: 680px;
   background: #ffffff;
   border-radius: 12px;
-  padding: 32px;
+  padding: 24px;
 }
 
 /* 表单样式 */
 .form-card .el-form-item__label {
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.374px;
+  letter-spacing: 0;
   color: #1d1d1f;
   padding-bottom: 8px;
 }
@@ -441,19 +441,19 @@ export default {
 /* 移动端适配 */
 @media screen and (max-width: 768px) {
   .hero-section {
-    padding: 32px 16px;
+    padding: 24px 16px;
   }
 
   .hero-title {
-    font-size: 32px;
-    letter-spacing: -0.28px;
-    line-height: 1.14;
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    line-height: 1.3;
   }
 
   .hero-subtitle {
-    font-size: 17px;
-    letter-spacing: -0.374px;
-    line-height: 1.47;
+    font-size: 14px;
+    letter-spacing: 0;
+    line-height: 1.5;
   }
 
   .form-section {
