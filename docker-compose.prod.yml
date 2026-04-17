@@ -1,0 +1,69 @@
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15
+    container_name: jifang-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-jifang}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-jifang123}
+      POSTGRES_DB: ${DB_NAME:-jifang_jianshe}
+      TZ: Asia/Shanghai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-jifang} -d ${DB_NAME:-jifang_jianshe}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - jifang-network
+
+  # 后端服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: jifang-backend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-jifang_jianshe}
+      DB_USER: ${DB_USER:-jifang}
+      DB_PASSWORD: ${DB_PASSWORD:-jifang123}
+      JWT_SECRET: ${JWT_SECRET:-local-test-secret-key}
+      JWT_EXPIRES_IN: 12h
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
+      SWAGGER_ENABLED: false
+      EMAIL_ENABLED: false
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - jifang-network
+
+  # Nginx 前端
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: jifang-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - jifang-network
+
+volumes:
+  postgres_data:
+
+networks:
+  jifang-network:
+    driver: bridge

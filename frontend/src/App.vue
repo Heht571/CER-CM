@@ -160,7 +160,7 @@ a {
   }
 
   .stat-value {
-    font-size: 28px;
+    font-size: 22px;
   }
 
   /* 进度圈适配 */
@@ -183,15 +183,15 @@ a {
 /* 触摸优化 */
 @media (hover: none) and (pointer: coarse) {
   .el-button {
-    min-height: 44px;
+    min-height: 36px;
   }
 
   .el-input__inner {
-    height: 44px;
+    height: 36px;
   }
 
   .el-select .el-input__inner {
-    height: 44px;
+    height: 36px;
   }
 }
 </style>

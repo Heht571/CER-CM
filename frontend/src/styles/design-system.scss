@@ -82,9 +82,9 @@
 html, body, #app {
   height: 100%;
   font-family: var(--font-text);
-  font-size: 17px;
-  line-height: 1.47;
-  letter-spacing: -0.374px;
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
   color: var(--color-text-dark);
   background: var(--color-bg-light);
   -webkit-font-smoothing: antialiased;
@@ -109,9 +109,9 @@ html, body, #app {
   border-bottom: none;
   color: var(--color-text-dark);
   font-weight: 600;
-  font-size: 21px;
-  letter-spacing: 0.231px;
-  line-height: 1.19;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: 1.5;
 }
 
 .el-card__body {
@@ -123,7 +123,7 @@ html, body, #app {
 .el-button {
   font-family: var(--font-text);
   font-weight: 400;
-  font-size: 17px;
+  font-size: 14px;
   border-radius: var(--radius-md);
   padding: 8px 15px;
   transition: all var(--transition-fast);
@@ -191,11 +191,11 @@ html, body, #app {
   border: none;
   color: var(--color-text-dark);
   font-family: var(--font-text);
-  font-size: 17px;
-  letter-spacing: -0.374px;
+  font-size: 14px;
+  letter-spacing: 0;
   border-radius: var(--radius-lg);
   padding: 0 14px;
-  height: 44px;
+  height: 36px;
 }
 
 .el-input__inner:focus {
@@ -222,8 +222,8 @@ html, body, #app {
 
 .el-select-dropdown__item {
   color: var(--color-text-secondary);
-  font-size: 17px;
-  letter-spacing: -0.374px;
+  font-size: 14px;
+  letter-spacing: 0;
 }
 
 .el-select-dropdown__item.hover,
@@ -293,8 +293,8 @@ html, body, #app {
   background: transparent;
   color: var(--color-text-dark);
   font-family: var(--font-text);
-  font-size: 17px;
-  letter-spacing: -0.374px;
+  font-size: 14px;
+  letter-spacing: 0;
 }
 
 .el-table::before {
@@ -339,8 +339,8 @@ html, body, #app {
 .el-dialog__title {
   color: var(--color-text-dark);
   font-weight: 600;
-  font-size: 21px;
-  letter-spacing: 0.231px;
+  font-size: 16px;
+  letter-spacing: 0;
 }
 
 .el-dialog__body {
@@ -357,8 +357,8 @@ html, body, #app {
 .el-form-item__label {
   color: var(--color-text-secondary);
   font-weight: 400;
-  font-size: 17px;
-  letter-spacing: -0.374px;
+  font-size: 14px;
+  letter-spacing: 0;
 }
 
 .el-form-item {
@@ -488,7 +488,7 @@ html, body, #app {
   border-bottom: none;
   color: var(--color-text-dark);
   font-weight: 600;
-  font-size: 21px;
+  font-size: 16px;
 }
 
 .el-drawer__body {
@@ -643,7 +643,7 @@ html, body, #app {
   }
 
   html, body, #app {
-    font-size: 17px;
+    font-size: 14px;
   }
 
   .el-card__body {

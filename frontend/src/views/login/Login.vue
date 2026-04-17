@@ -106,7 +106,7 @@ export default {
 /* Hero 区 - 深色背景卡片 */
 .hero-section {
   background: #000000;
-  padding: 80px 48px 60px;
+  padding: 48px 32px;
   text-align: center;
   flex: 1;
   display: flex;
@@ -122,20 +122,20 @@ export default {
 
 .hero-title {
   font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
-  font-size: 56px;
+  font-size: 32px;
   font-weight: 600;
-  letter-spacing: -0.28px;
-  line-height: 1.07;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   color: #ffffff;
   margin: 0 0 12px 0;
 }
 
 .hero-subtitle {
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 21px;
+  font-size: 16px;
   font-weight: 400;
-  letter-spacing: 0.231px;
-  line-height: 1.19;
+  letter-spacing: 0;
+  line-height: 1.5;
   color: rgba(255, 255, 255, 0.8);
   margin: 0;
 }
@@ -143,7 +143,7 @@ export default {
 /* 登录区 - 浅色背景 */
 .login-section {
   background: #f5f5f7;
-  padding: 48px;
+  padding: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -159,10 +159,10 @@ export default {
 
 .login-heading {
   font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
-  font-size: 32px;
+  font-size: 20px;
   font-weight: 600;
-  letter-spacing: -0.28px;
-  line-height: 1.14;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
   color: #1d1d1f;
   margin: 0 0 24px 0;
   text-align: center;
@@ -179,11 +179,11 @@ export default {
 
 .login-btn {
   width: 100%;
-  height: 44px;
+  height: 36px;
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 400;
-  letter-spacing: -0.374px;
+  letter-spacing: 0;
   border-radius: 980px;
   border: none;
 }
@@ -200,19 +200,19 @@ export default {
 /* 移动端适配 */
 @media screen and (max-width: 768px) {
   .hero-section {
-    padding: 60px 24px 48px;
+    padding: 32px 24px;
   }
 
   .hero-title {
-    font-size: 32px;
-    letter-spacing: -0.28px;
-    line-height: 1.14;
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    line-height: 1.3;
   }
 
   .hero-subtitle {
-    font-size: 17px;
-    letter-spacing: -0.374px;
-    line-height: 1.47;
+    font-size: 14px;
+    letter-spacing: 0;
+    line-height: 1.5;
   }
 
   .login-section {
@@ -220,9 +220,9 @@ export default {
   }
 
   .login-heading {
-    font-size: 21px;
-    letter-spacing: 0.231px;
-    line-height: 1.19;
+    font-size: 16px;
+    letter-spacing: 0;
+    line-height: 1.5;
   }
 
   .login-card {
