@@ -584,7 +584,7 @@ export default {
 /* Hero 区 - 深色背景卡片 */
 .hero-section {
   background: #000000;
-  padding: 48px 32px;
+  padding: 32px 24px;
   margin: 0 0 24px 0;
   border-radius: 18px;
   display: flex;
@@ -598,20 +598,20 @@ export default {
 
 .hero-title {
   font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
-  font-size: 48px;
+  font-size: 32px;
   font-weight: 600;
-  letter-spacing: -0.28px;
-  line-height: 1.08;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   color: #ffffff;
   margin: 0 0 8px 0;
 }
 
 .hero-subtitle {
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 21px;
+  font-size: 16px;
   font-weight: 400;
-  letter-spacing: 0.231px;
-  line-height: 1.19;
+  letter-spacing: 0;
+  line-height: 1.5;
   color: rgba(255, 255, 255, 0.6);
   margin: 0;
 }
@@ -627,17 +627,17 @@ export default {
 
 .hero-stats .stat-value {
   font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
-  font-size: 48px;
+  font-size: 32px;
   font-weight: 600;
-  letter-spacing: -0.28px;
-  line-height: 1.08;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   color: #ffffff;
 }
 
 .hero-stats .stat-label {
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 17px;
-  letter-spacing: -0.374px;
+  font-size: 14px;
+  letter-spacing: 0;
   color: rgba(255, 255, 255, 0.6);
 }
 
@@ -689,8 +689,8 @@ export default {
 
 .info-value {
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 17px;
-  letter-spacing: -0.374px;
+  font-size: 14px;
+  letter-spacing: 0;
   color: #1d1d1f;
 }
 
@@ -722,10 +722,10 @@ export default {
 
 .time-value {
   font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
-  font-size: 32px;
+  font-size: 24px;
   font-weight: 600;
-  letter-spacing: -0.28px;
-  line-height: 1.14;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
   color: #1d1d1f;
   margin-top: 8px;
 }
@@ -743,10 +743,10 @@ export default {
 
 .section-title {
   font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
-  font-size: 32px;
+  font-size: 20px;
   font-weight: 600;
-  letter-spacing: -0.28px;
-  line-height: 1.14;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
   color: #1d1d1f;
   margin: 0;
 }
@@ -771,8 +771,8 @@ export default {
 .comparison-label {
   width: 80px;
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 17px;
-  letter-spacing: -0.374px;
+  font-size: 14px;
+  letter-spacing: 0;
   color: rgba(0, 0, 0, 0.8);
 }
 
@@ -800,9 +800,9 @@ export default {
   width: 50px;
   text-align: right;
   font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
-  font-size: 21px;
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: 0.231px;
+  letter-spacing: 0;
   color: #1d1d1f;
 }
 
@@ -820,8 +820,8 @@ export default {
 .deviation-label {
   width: 80px;
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 17px;
-  letter-spacing: -0.374px;
+  font-size: 14px;
+  letter-spacing: 0;
   color: rgba(0, 0, 0, 0.8);
 }
 
@@ -917,9 +917,9 @@ export default {
 
 .task-name {
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 500;
-  letter-spacing: -0.374px;
+  letter-spacing: 0;
   color: #1d1d1f;
 }
 
@@ -943,9 +943,9 @@ export default {
 
 .task-progress {
   font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
-  font-size: 21px;
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: 0.231px;
+  letter-spacing: 0;
   color: #1d1d1f;
 }
 
@@ -996,9 +996,9 @@ export default {
 
 .log-task {
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 500;
-  letter-spacing: -0.374px;
+  letter-spacing: 0;
   color: #1d1d1f;
 }
 
@@ -1068,8 +1068,8 @@ export default {
 .change-old,
 .change-new {
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 17px;
-  letter-spacing: -0.374px;
+  font-size: 14px;
+  letter-spacing: 0;
   color: #1d1d1f;
 }
 
@@ -1102,36 +1102,36 @@ export default {
   .hero-section {
     flex-direction: column;
     text-align: center;
-    padding: 32px 16px;
-    gap: 24px;
+    padding: 24px 16px;
+    gap: 20px;
   }
 
   .hero-title {
-    font-size: 32px;
-    letter-spacing: -0.28px;
-    line-height: 1.14;
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    line-height: 1.3;
   }
 
   .hero-subtitle {
-    font-size: 17px;
-    letter-spacing: -0.374px;
-    line-height: 1.47;
+    font-size: 14px;
+    letter-spacing: 0;
+    line-height: 1.5;
   }
 
   .hero-stats {
     justify-content: center;
-    gap: 24px;
+    gap: 20px;
   }
 
   .hero-stats .stat-value {
-    font-size: 32px;
-    letter-spacing: -0.28px;
-    line-height: 1.14;
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    line-height: 1.3;
   }
 
   .hero-stats .stat-label {
-    font-size: 14px;
-    letter-spacing: -0.224px;
+    font-size: 12px;
+    letter-spacing: 0;
   }
 
   .action-section {
@@ -1164,13 +1164,13 @@ export default {
   }
 
   .time-value {
-    font-size: 24px;
+    font-size: 20px;
   }
 
   .section-title {
-    font-size: 21px;
-    letter-spacing: 0.231px;
-    line-height: 1.19;
+    font-size: 16px;
+    letter-spacing: 0;
+    line-height: 1.5;
   }
 
   .comparison-row {

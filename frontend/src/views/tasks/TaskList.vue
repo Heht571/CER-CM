@@ -336,7 +336,7 @@ export default {
 /* Hero 区 - 深色背景卡片 */
 .hero-section {
   background: #000000;
-  padding: 48px 32px;
+  padding: 32px 24px;
   margin: 0 0 24px 0;
   border-radius: 18px;
   display: flex;
@@ -350,20 +350,20 @@ export default {
 
 .hero-title {
   font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
-  font-size: 48px;
+  font-size: 32px;
   font-weight: 600;
-  letter-spacing: -0.28px;
-  line-height: 1.08;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   color: #ffffff;
   margin: 0 0 8px 0;
 }
 
 .hero-subtitle {
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 21px;
+  font-size: 16px;
   font-weight: 400;
-  letter-spacing: 0.231px;
-  line-height: 1.19;
+  letter-spacing: 0;
+  line-height: 1.5;
   color: rgba(255, 255, 255, 0.8);
   margin: 0;
 }
@@ -379,10 +379,10 @@ export default {
 
 .hero-stats .stat-value {
   font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
-  font-size: 48px;
+  font-size: 32px;
   font-weight: 600;
-  letter-spacing: -0.28px;
-  line-height: 1.08;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   color: #ffffff;
 }
 
@@ -396,8 +396,8 @@ export default {
 
 .hero-stats .stat-label {
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 17px;
-  letter-spacing: -0.374px;
+  font-size: 14px;
+  letter-spacing: 0;
   color: rgba(255, 255, 255, 0.6);
 }
 
@@ -458,10 +458,10 @@ export default {
 
 .room-name {
   font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
-  font-size: 21px;
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: 0.231px;
-  line-height: 1.19;
+  letter-spacing: 0;
+  line-height: 1.5;
   color: #1d1d1f;
 }
 
@@ -488,9 +488,9 @@ export default {
 
 .progress-num {
   font-family: var(--font-display, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif);
-  font-size: 21px;
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: 0.231px;
+  letter-spacing: 0;
   color: #1d1d1f;
 }
 
@@ -519,9 +519,9 @@ export default {
 
 .task-label {
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.374px;
+  letter-spacing: 0;
   color: rgba(0, 0, 0, 0.8);
 }
 
@@ -563,9 +563,9 @@ export default {
 
 .task-name {
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 500;
-  letter-spacing: -0.374px;
+  letter-spacing: 0;
   color: #1d1d1f;
 }
 
@@ -588,8 +588,8 @@ export default {
 
 .completed-all {
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 17px;
-  letter-spacing: -0.374px;
+  font-size: 14px;
+  letter-spacing: 0;
   color: #34c759;
 }
 
@@ -617,8 +617,8 @@ export default {
   text-align: center;
   padding: 24px;
   font-family: var(--font-text, 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);
-  font-size: 17px;
-  letter-spacing: -0.374px;
+  font-size: 14px;
+  letter-spacing: 0;
   color: rgba(0, 0, 0, 0.48);
 }
 
@@ -635,36 +635,36 @@ export default {
   .hero-section {
     flex-direction: column;
     text-align: center;
-    padding: 32px 16px;
-    gap: 24px;
+    padding: 24px 16px;
+    gap: 20px;
   }
 
   .hero-title {
-    font-size: 32px;
-    letter-spacing: -0.28px;
-    line-height: 1.14;
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    line-height: 1.3;
   }
 
   .hero-subtitle {
-    font-size: 17px;
-    letter-spacing: -0.374px;
-    line-height: 1.47;
+    font-size: 14px;
+    letter-spacing: 0;
+    line-height: 1.5;
   }
 
   .hero-stats {
     justify-content: center;
-    gap: 24px;
+    gap: 20px;
   }
 
   .hero-stats .stat-value {
-    font-size: 32px;
-    letter-spacing: -0.28px;
-    line-height: 1.14;
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    line-height: 1.3;
   }
 
   .hero-stats .stat-label {
-    font-size: 14px;
-    letter-spacing: -0.224px;
+    font-size: 12px;
+    letter-spacing: 0;
   }
 
   .search-section {

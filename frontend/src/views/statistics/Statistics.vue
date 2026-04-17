@@ -160,7 +160,7 @@ export default {
 }
 
 .stat-value {
-  font-size: 32px;
+  font-size: 24px;
   font-weight: bold;
   color: #409EFF;
 }
